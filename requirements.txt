@@ -1,5 +1,7 @@
 # AcaDoc AI POC - Requirements
 # Linked to Technical Plan v1.2 Sections 3, 4, 8, 9
+fastapi>=0.100.0
+uvicorn>=0.20.0
 
 # Core Framework
 langgraph>=0.2.0
@@ -16,7 +18,8 @@ huggingface-hub>=0.20.0
 
 # LLM Integration (OpenAI or Ollama)
 openai>=1.0.0
-# or for Ollama: ollama>=0.1.0
+ollama>=0.1.0
+langchain-ollama>=0.1.0
 
 # Validation & Types
 pydantic>=2.0.0
