@@ -65,12 +65,13 @@ class RetrieverAgent:
     def __init__(self, vector_store):
         self.vector_store = vector_store
 
-    def invoke(self, state: AgentState) -> AgentState:
+    async def invoke(self, state: AgentState) -> AgentState:
         """Retrieve top-k chunks from vector store."""
         question = state["question"]
         logger.info(f"[RETRIEVE] Processing: '{question[:50]}...'")
 
-        results = self.vector_store.query(query_text=question, n_results=3, where=None)
+        # Await the async SurrealDB query
+        results = await self.vector_store.query(query_text=question, n_results=3)
 
         # Extract documents and metadata
         retrieved = []
@@ -316,7 +317,7 @@ def create_agent_graph(vector_store, llm):
     return workflow.compile()
 
 
-def run_pipeline(question: str, vector_store, llm) -> dict:
+async def run_pipeline(question: str, vector_store, llm) -> dict:
     """
     Run the full 3-agent pipeline.
     Returns final state with answer, citations, and validation confidence.
@@ -328,7 +329,7 @@ def run_pipeline(question: str, vector_store, llm) -> dict:
 
     # Create and run graph
     graph = create_agent_graph(vector_store, llm)
-    result = graph.invoke(initial_state)
+    result = await graph.ainvoke(initial_state)
 
     logger.info("Pipeline completed")
     return result

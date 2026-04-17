@@ -71,7 +71,7 @@ async def chat(request: QueryRequest):
     )
     
     try:
-        result = run_pipeline(request.question, vs, llm)
+        result = await run_pipeline(request.question, vs, llm)
         
         return QueryResponse(
             answer=result.get("answer", "No answer generated"),
