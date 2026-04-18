@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-from surrealdb import Surreal
+from surrealdb import AsyncSurreal as Surreal
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class VectorStoreManager:
         """Async connection to SurrealDB."""
         db = Surreal(self.url)
         await db.connect()
-        await db.signin({"user": self.user, "pass": self.password})
+        await db.signin({"username": self.user, "password": self.password})
         await db.use(self.namespace, self.database)
         return db
 

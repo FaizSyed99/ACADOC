@@ -76,13 +76,24 @@ def main():
     # Sidebar: Configuration
     st.sidebar.header("Configuration")
 
-    # PDF selection
-    pdf_options = [r"C:\Users\MUFAQHAM\Downloads\Gray's Anatomy .pdf", "data/sample_pharma.pdf"]
-    selected_pdf = st.sidebar.selectbox(
-        "Select Textbook",
-        pdf_options,
-        help="Select which medical textbook to use for grounding",
-    )
+    # PDF Upload or Selection
+    uploaded_file = st.sidebar.file_uploader("Upload a Medical Textbook (PDF)", type="pdf", help="Upload a new PDF to analyze")
+    
+    if uploaded_file is not None:
+        os.makedirs("data", exist_ok=True)
+        # Save the uploaded file to disk so ingest.py can load it
+        pdf_path = os.path.join("data", uploaded_file.name)
+        with open(pdf_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        selected_pdf = pdf_path
+        st.sidebar.success(f"Successfully uploaded {uploaded_file.name}")
+    else:
+        pdf_options = [r"C:\Users\MUFAQHAM\Downloads\Gray's Anatomy .pdf", "data/sample_pharma.pdf"]
+        selected_pdf = st.sidebar.selectbox(
+            "Or Select an Existing Textbook",
+            pdf_options,
+            help="Select which medical textbook to use for grounding",
+        )
 
     # Check PDF exists
     if not Path(selected_pdf).exists():
