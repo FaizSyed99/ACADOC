@@ -25,7 +25,7 @@ def get_vector_store():
     global vector_store
     if vector_store is None:
         try:
-            vector_store = VectorStoreManager(persist_directory="./chroma_db")
+            vector_store = VectorStoreManager()
         except Exception as e:
             print(f"Error loading vector store: {e}")
             return None

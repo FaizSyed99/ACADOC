@@ -77,7 +77,7 @@ def main():
     st.sidebar.header("Configuration")
 
     # PDF selection
-    pdf_options = ["data/sample_pharma.pdf"]
+    pdf_options = [r"C:\Users\MUFAQHAM\Downloads\Gray's Anatomy .pdf", "data/sample_pharma.pdf"]
     selected_pdf = st.sidebar.selectbox(
         "Select Textbook",
         pdf_options,
