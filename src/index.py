@@ -9,7 +9,7 @@ from typing import List, Optional
 
 import chromadb
 from chromadb.config import Settings
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +25,7 @@ class VectorStoreManager:
     def __init__(
         self,
         persist_directory: str = "chroma_db",
-        collection_name: str = "acadoc_chunks",
+        collection_name: str = "acadoc_chunks_openai",
     ):
         logger.info(f"Initializing VectorStoreManager: {collection_name}")
 
@@ -35,10 +35,8 @@ class VectorStoreManager:
             settings=Settings(anonymized_telemetry=False, allow_reset=True),
         )
 
-        # Initialize embedding model (lightweight, local)
-        self.embedding_model = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2", model_kwargs={"device": "cpu"}
-        )
+        # Initialize embedding model (Cloud, extremely fast)
+        self.embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
 
         # Create or get collection
         self.collection = self.client.get_or_create_collection(
