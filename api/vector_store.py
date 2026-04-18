@@ -25,31 +25,43 @@ class VectorStoreManager:
         self,
         url: str = "ws://localhost:8000/rpc",
         namespace: str = "acadoc",
-        database: str = "medical",
+        database: str = "prod",
         table: str = "textbook_chunks",
     ):
         self.url = os.getenv("SURREALDB_URL", url)
-        self.namespace = os.getenv("SURREALDB_NAMESPACE", namespace)
-        self.database = os.getenv("SURREALDB_DATABASE", database)
+        self.namespace = os.getenv("SURREALDB_NS") or os.getenv("SURREALDB_NAMESPACE") or namespace
+        self.database = os.getenv("SURREALDB_DB") or os.getenv("SURREALDB_DATABASE") or database
         self.table = os.getenv("SURREALDB_TABLE", table)
+        self.token = os.getenv("SURREALDB_TOKEN")
         self.user = os.getenv("SURREALDB_USER", "root")
         self.password = os.getenv("SURREALDB_PASS", "root")
 
         logger.info(f"Initializing SurrealDB Manager on {self.url}")
 
         # Initialize embedding model
-        # Note: We keep this local for POC speed, but can move to cloud embeddings.
         self.embedding_model = HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2", model_kwargs={"device": "cpu"}
         )
 
     async def _get_db(self):
-        """Async connection to SurrealDB."""
+        """Connection to SurrealDB (supporting both Cloud Token and Local)."""
         db = Surreal(self.url)
-        await db.connect()
-        await db.signin({"username": self.user, "password": self.password})
-        await db.use(self.namespace, self.database)
-        return db
+        # Note: Using synchronous connection behavior if detected, 
+        # but Surreal(url) in many versions handles the transport choice.
+        # For this version, we call signin or authenticate.
+        
+        # We wrap in try/except to handle the specific driver version on user's machine
+        try:
+            if self.token:
+                db.authenticate(self.token)
+            else:
+                db.signin({"user": self.user, "pass": self.password})
+            
+            db.use(self.namespace, self.database)
+            return db
+        except Exception as e:
+            logger.error(f"SurrealDB Connection failed: {e}")
+            raise e
 
     async def add_documents(self, documents: List[Document]) -> None:
         """

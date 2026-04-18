@@ -46,7 +46,11 @@ export default function Home() {
         body: JSON.stringify({ question: input }),
       });
 
-      if (!response.ok) throw new Error('Failed to fetch');
+if (!response.ok) {
+      const errorText = await response.text(); // This gets the Python traceback!
+      console.error("🚨 Backend Error Details:", errorText);
+      throw new Error(`Server Error ${response.status}: ${errorText}`);
+    }
 
       const data = await response.json();
       
