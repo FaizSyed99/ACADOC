@@ -1,144 +1,140 @@
 """
-SurrealDB Indexing Module: Embeddings → SurrealDB
-Transitioning from ChromaDB for better scalability and relational hierarchy.
+FAISS Vector Store Manager for API
+Replaces SurrealDB/ChromaDB with the new FAISS-based logic.
 """
 
 import logging
 import os
+import json
+import faiss
+import numpy as np
 from typing import List, Optional, Dict, Any
-
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from sentence_transformers import SentenceTransformer
 from langchain_core.documents import Document
-from surrealdb import AsyncSurreal as Surreal
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class VectorStoreManager:
     """
-    Manages SurrealDB vector storage.
-    Enables future graph-based hierarchy as per Technical Architecture.
+    Manages FAISS vector storage for the API.
+    Provides async-compatible interface for compatibility with existing endpoints.
     """
 
     def __init__(
         self,
-        url: str = "ws://localhost:8000/rpc",
-        namespace: str = "acadoc",
-        database: str = "prod",
-        table: str = "textbook_chunks",
+        persist_dir: str = "chroma_db",
+        model_name: str = "all-MiniLM-L6-v2",
     ):
-        self.url = os.getenv("SURREALDB_URL", url)
-        self.namespace = os.getenv("SURREALDB_NS") or os.getenv("SURREALDB_NAMESPACE") or namespace
-        self.database = os.getenv("SURREALDB_DB") or os.getenv("SURREALDB_DATABASE") or database
-        self.table = os.getenv("SURREALDB_TABLE", table)
-        self.token = os.getenv("SURREALDB_TOKEN")
-        self.user = os.getenv("SURREALDB_USER", "root")
-        self.password = os.getenv("SURREALDB_PASS", "root")
-
-        logger.info(f"Initializing SurrealDB Manager on {self.url}")
-
-        # Initialize embedding model
-        self.embedding_model = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2", model_kwargs={"device": "cpu"}
-        )
-
-    async def _get_db(self):
-        """Connection to SurrealDB (supporting both Cloud Token and Local)."""
-        db = Surreal(self.url)
-        # Note: Using synchronous connection behavior if detected, 
-        # but Surreal(url) in many versions handles the transport choice.
-        # For this version, we call signin or authenticate.
+        self.persist_dir = persist_dir
+        os.makedirs(self.persist_dir, exist_ok=True)
         
-        # We wrap in try/except to handle the specific driver version on user's machine
+        self.index_path = os.path.join(self.persist_dir, "faiss_index.bin")
+        self.chunks_path = os.path.join(self.persist_dir, "chunks.json")
+        
+        # Load model
+        logger.info(f"Loading embedding model: {model_name}")
+        self.model = SentenceTransformer(model_name)
+        
+        self.index = None
+        self.chunks = []
+        
+        if os.path.exists(self.index_path) and os.path.exists(self.chunks_path):
+            self.load()
+
+    def load(self):
         try:
-            if self.token:
-                db.authenticate(self.token)
-            else:
-                db.signin({"user": self.user, "pass": self.password})
-            
-            db.use(self.namespace, self.database)
-            return db
+            self.index = faiss.read_index(self.index_path)
+            with open(self.chunks_path, "r", encoding="utf-8") as f:
+                self.chunks = json.load(f)
+            logger.info(f"Loaded FAISS index and {len(self.chunks)} chunks")
         except Exception as e:
-            logger.error(f"SurrealDB Connection failed: {e}")
-            raise e
+            logger.error(f"Failed to load FAISS index: {e}")
+
+    def save(self):
+        if self.index is not None:
+            faiss.write_index(self.index, self.index_path)
+        with open(self.chunks_path, "w", encoding="utf-8") as f:
+            json.dump(self.chunks, f, indent=2, ensure_ascii=False)
 
     async def add_documents(self, documents: List[Document]) -> None:
-        """
-        Add documents to SurrealDB with vector embeddings.
-        """
-        logger.info(f"Adding {len(documents)} documents to SurrealDB table: {self.table}")
+        """Add documents to FAISS index."""
+        logger.info(f"Adding {len(documents)} documents to FAISS")
         
-        db = await self._get_db()
-        try:
-            for i, doc in enumerate(documents):
-                embedding = self.embedding_model.embed_query(doc.page_content)
-                
-                # Create record with vector and metadata
-                await db.create(
-                    self.table,
-                    {
-                        "content": doc.page_content,
-                        "metadata": doc.metadata,
-                        "embedding": embedding,
-                    }
-                )
-            logger.info("Successfully indexed documents in SurrealDB")
-        finally:
-            await db.close()
+        texts_to_embed = []
+        new_chunks = []
+        
+        for doc in documents:
+            text = doc.page_content
+            meta = doc.metadata
+            
+            chunk = {
+                "chapter": meta.get("chapter", "Unknown"),
+                "topic": meta.get("topic", "General"),
+                "content": text,
+                "metadata": meta
+            }
+            new_chunks.append(chunk)
+            texts_to_embed.append(f"{chunk['chapter']} {chunk['topic']} {chunk['content']}")
+
+        embeddings = self.model.encode(texts_to_embed)
+        embeddings = np.array(embeddings).astype("float32")
+
+        if self.index is None:
+            dimension = embeddings.shape[1]
+            self.index = faiss.IndexFlatL2(dimension)
+        
+        self.index.add(embeddings)
+        self.chunks.extend(new_chunks)
+        self.save()
 
     async def query(
         self, query_text: str, n_results: int = 3
     ) -> Dict[str, Any]:
-        """
-        Query SurrealDB using vector similarity.
-        """
-        logger.info(f"Querying SurrealDB: '{query_text[:50]}...'")
-        
-        query_embedding = self.embedding_model.embed_query(query_text)
-        
-        db = await self._get_db()
-        try:
-            # SurrealQL vector similarity query
-            # We use cosine similarity as defined in the technical plan logic.
-            ql = f"""
-            SELECT *, vector::similarity::cosine(embedding, $query_vec) AS similarity
-            FROM {self.table}
-            WHERE embedding <10> $query_vec
-            ORDER BY similarity DESC
-            LIMIT {n_results};
-            """
+        """Query FAISS index. Matches src/agents.py interface."""
+        if self.index is None:
+            return {"documents": [[]], "metadatas": [[]], "distances": [[]]}
             
-            # Note: <10> is an example of an MTREE index search if defined.
-            # For simplicity in POC, we can also use a raw order by if table is small.
+        query_vec = self.model.encode([query_text]).astype("float32")
+        distances, indices = self.index.search(query_vec, n_results)
+
+        formatted_docs = []
+        formatted_metas = []
+        formatted_dists = []
+
+        for i, idx in enumerate(indices[0]):
+            if idx == -1 or idx >= len(self.chunks):
+                continue
             
-            results = await db.query(ql, {"query_vec": query_embedding})
-            
-            # Format results to match the previous tool-friendly structure
-            # To maintain compatibility with agents.py
-            formatted_docs = []
-            formatted_metas = []
-            formatted_dists = []
-            
-            if results and results[0].get("result"):
-                for row in results[0]["result"]:
-                    formatted_docs.append(row["content"])
-                    formatted_metas.append(row["metadata"])
-                    formatted_dists.append(row.get("similarity", 0))
-            
-            return {
-                "documents": [formatted_docs],
-                "metadatas": [formatted_metas],
-                "distances": [formatted_dists]
-            }
-        finally:
-            await db.close()
+            chunk = self.chunks[idx]
+            formatted_docs.append(chunk["content"])
+            formatted_metas.append(chunk["metadata"])
+            formatted_dists.append(float(distances[0][i]))
+
+        return {
+            "documents": [formatted_docs],
+            "metadatas": [formatted_metas],
+            "distances": [formatted_dists]
+        }
+
+    async def retrieve(self, query_text: str, n_results: int = 3) -> List[Dict[str, Any]]:
+        """Query FAISS index. Matches api/agents.py interface."""
+        res = await self.query(query_text, n_results)
+        retrieved = []
+        if res["documents"] and res["documents"][0]:
+            for i, doc in enumerate(res["documents"][0]):
+                chunk_data = res["metadatas"][0][i].copy()
+                chunk_data["content"] = doc
+                retrieved.append(chunk_data)
+        return retrieved
 
     async def reset(self) -> None:
-        """Wipe the table."""
-        db = await self._get_db()
-        try:
-            await db.query(f"DELETE {self.table}")
-            logger.warning(f"Cleared table {self.table}")
-        finally:
-            await db.close()
+        """Clear the index."""
+        self.index = None
+        self.chunks = []
+        if os.path.exists(self.index_path): os.remove(self.index_path)
+        if os.path.exists(self.chunks_path): os.remove(self.chunks_path)
+        logger.warning("FAISS index reset")
+    
+    async def close(self):
+        pass

@@ -20,13 +20,12 @@ __pycache__/
 # Vector Store / Local DB
 chroma_db/
 *.db
+*.bin
+*.json
 
 # Environment Variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
 
 # OS
 .DS_Store
@@ -36,5 +35,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Data (Optional: ignore large PDFs if they are strictly for local testing)
-# data/*.pdf
+# Source Data / Extracted Zips
+AcaDocAI/
+data/*.pdf

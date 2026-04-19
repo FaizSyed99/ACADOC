@@ -8,10 +8,14 @@ import os
 from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
+# Load environment variables
+load_dotenv()
+
 from ingest import ingest_pdf
-from index import VectorStoreManager, create_index
+from vector_store_faiss import VectorStoreManager
 from agents import run_pipeline, AgentState
 
 logging.basicConfig(level=logging.INFO)
@@ -45,8 +49,9 @@ def initialize_vector_store(
 
     # Create new index
     documents = ingest_pdf(pdf_path)
-    manager = create_index(documents, persist_directory=persist_dir)
-    logger.info("Created new vector store")
+    manager = VectorStoreManager(persist_dir + "/faiss_index.bin", persist_dir + "/chunks.json")
+    manager.add_documents(documents)
+    logger.info("Created new vector store index")
     return manager
 
 
@@ -88,7 +93,11 @@ def main():
         selected_pdf = pdf_path
         st.sidebar.success(f"Successfully uploaded {uploaded_file.name}")
     else:
-        pdf_options = [r"C:\Users\MUFAQHAM\Downloads\Gray's Anatomy .pdf", "data/sample_pharma.pdf"]
+        pdf_options = [
+            r"AcaDocAI/Grays_Anatomy_Extracted_2.pdf",
+            r"C:\Users\MUFAQHAM\Downloads\Gray's Anatomy .pdf", 
+            "data/sample_pharma.pdf"
+        ]
         selected_pdf = st.sidebar.selectbox(
             "Or Select an Existing Textbook",
             pdf_options,
