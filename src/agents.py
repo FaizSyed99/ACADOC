@@ -70,7 +70,7 @@ class RetrieverAgent:
         question = state["question"]
         logger.info(f"[RETRIEVE] Processing: '{question[:50]}...'")
 
-        results = self.vector_store.query(query_text=question, n_results=3, where=None)
+        results = self.vector_store.query(query_text=question, n_results=10, where=None)
 
         # Extract documents and metadata
         retrieved = []

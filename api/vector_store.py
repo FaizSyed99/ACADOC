@@ -12,6 +12,12 @@ from typing import List, Optional, Dict, Any
 from sentence_transformers import SentenceTransformer
 from langchain_core.documents import Document
 
+try:
+    from google.cloud import storage
+    HAS_GCS = True
+except ImportError:
+    HAS_GCS = False
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -38,6 +44,10 @@ class VectorStoreManager:
         
         self.index = None
         self.chunks = []
+
+        self.gcs_bucket = os.getenv("FAISS_GCS_BUCKET")
+        if self.gcs_bucket and HAS_GCS:
+            self._sync_from_gcs()
         
         if os.path.exists(self.index_path) and os.path.exists(self.chunks_path):
             self.load()
@@ -56,6 +66,39 @@ class VectorStoreManager:
             faiss.write_index(self.index, self.index_path)
         with open(self.chunks_path, "w", encoding="utf-8") as f:
             json.dump(self.chunks, f, indent=2, ensure_ascii=False)
+        
+        if self.gcs_bucket and HAS_GCS:
+            self._sync_to_gcs()
+
+    def _sync_from_gcs(self):
+        """Download index files from GCS."""
+        try:
+            client = storage.Client()
+            bucket = client.bucket(self.gcs_bucket)
+            
+            for file_path in [self.index_path, self.chunks_path]:
+                blob_name = os.path.basename(file_path)
+                blob = bucket.blob(blob_name)
+                if blob.exists():
+                    logger.info(f"Downloading {blob_name} from GCS bucket {self.gcs_bucket}")
+                    blob.download_to_filename(file_path)
+        except Exception as e:
+            logger.error(f"Failed to sync from GCS: {e}")
+
+    def _sync_to_gcs(self):
+        """Upload index files to GCS."""
+        try:
+            client = storage.Client()
+            bucket = client.bucket(self.gcs_bucket)
+            
+            for file_path in [self.index_path, self.chunks_path]:
+                if os.path.exists(file_path):
+                    blob_name = os.path.basename(file_path)
+                    blob = bucket.blob(blob_name)
+                    logger.info(f"Uploading {blob_name} to GCS bucket {self.gcs_bucket}")
+                    blob.upload_from_filename(file_path)
+        except Exception as e:
+            logger.error(f"Failed to sync to GCS: {e}")
 
     async def add_documents(self, documents: List[Document]) -> None:
         """Add documents to FAISS index."""
@@ -89,7 +132,7 @@ class VectorStoreManager:
         self.save()
 
     async def query(
-        self, query_text: str, n_results: int = 3
+        self, query_text: str, n_results: int = 10
     ) -> Dict[str, Any]:
         """Query FAISS index. Matches src/agents.py interface."""
         if self.index is None:

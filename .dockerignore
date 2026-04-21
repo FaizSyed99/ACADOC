@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.env
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+chroma_db
+AcaDocAI
+data
+backend_log.txt
+scratch
+*.bin
+*.json

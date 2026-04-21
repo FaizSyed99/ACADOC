@@ -1,0 +1,50 @@
+steps:
+  # 1. Build and Push Backend Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/backend:latest', '-f', 'Dockerfile.backend', '.']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/backend:latest']
+
+  # 2. Build and Push Frontend Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/frontend:latest', '-f', 'Dockerfile.frontend', '.']
+  
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/frontend:latest']
+
+  # 3. Deploy Backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'acadoc-backend'
+      - '--image=$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/backend:latest'
+      - '--region=$_LOCATION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=2Gi'
+      - '--cpu=1'
+
+  # 4. Deploy Frontend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'acadoc-frontend'
+      - '--image=$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/frontend:latest'
+      - '--region=$_LOCATION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=512Mi'
+      - '--cpu=1'
+
+substitutions:
+  _LOCATION: us-central1
+  _REPO_NAME: acadoc-repo
+
+images:
+  - '$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/backend:latest'
+  - '$_LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/frontend:latest'

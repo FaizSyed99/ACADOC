@@ -8,11 +8,12 @@ async def run_pipeline(question: str, vector_store, llm) -> dict:
     """
     try:
         # === RETRIEVE ===
-        # Ensure vector_store.retrieve is awaited if async
+        import inspect
         if hasattr(vector_store, 'retrieve'):
-            retrieved = await vector_store.retrieve(question) \
-                if hasattr(vector_store.retrieve, '__await__') \
-                else vector_store.retrieve(question)
+            if inspect.iscoroutinefunction(vector_store.retrieve):
+                retrieved = await vector_store.retrieve(question)
+            else:
+                retrieved = vector_store.retrieve(question)
         else:
             retrieved = []  # Fallback for mock mode
         

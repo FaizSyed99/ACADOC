@@ -25,6 +25,13 @@ SYNONYMS = {
     "basal lamina": ["basement membrane"],
     "mitochondria": ["mitochondrion"],
     "ribosome": ["ribosomes"],
+    "pharmacokinetics": ["adme", "absorption", "distribution", "metabolism", "excretion"],
+    "adme": ["pharmacokinetics"],
+    "pharmacodynamics": ["mechanism of action", "drug effect"],
+    "aspirin": ["acetylsalicylic acid", "asa"],
+    "digoxin": ["lanoxin", "cardiac glycoside"],
+    "heart failure": ["congestive heart failure", "chf"],
+    "myocardial infarction": ["heart attack", "mi"],
 }
 
 
