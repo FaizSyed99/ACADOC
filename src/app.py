@@ -14,7 +14,7 @@ from langchain_openai import ChatOpenAI
 # Load environment variables
 load_dotenv()
 
-from ingest import ingest_pdf
+from ingest import process_file
 from vector_store_faiss import VectorStoreManager
 from agents import run_pipeline, AgentState
 
@@ -48,7 +48,7 @@ def initialize_vector_store(
             logger.warning(f"Could not load existing store: {e}")
 
     # Create new index
-    documents = ingest_pdf(pdf_path)
+    documents = process_file(pdf_path)
     manager = VectorStoreManager(persist_dir + "/faiss_index.bin", persist_dir + "/chunks.json")
     manager.add_documents(documents)
     logger.info("Created new vector store index")
@@ -82,7 +82,7 @@ def main():
     st.sidebar.header("Configuration")
 
     # PDF Upload or Selection
-    uploaded_file = st.sidebar.file_uploader("Upload a Medical Textbook (PDF)", type="pdf", help="Upload a new PDF to analyze")
+    uploaded_file = st.sidebar.file_uploader("Upload Medical Reference", type=["pdf", "md", "txt", "png", "jpg", "jpeg"], help="Upload a new file to analyze")
     
     if uploaded_file is not None:
         os.makedirs("data", exist_ok=True)

@@ -1,8 +1,10 @@
 # api/index.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import shutil
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Import your agent pipeline and vector store
@@ -125,3 +127,46 @@ async def health():
     """Health check for load balancers / monitoring"""
     vs_status = "connected" if vector_store else "not_initialized"
     return {"status": "healthy", "service": "AcaDoc AI", "vector_store": vs_status}
+@app.post("/api/ingest")
+async def ingest_file(file: UploadFile = File(...)):
+    """
+    Unified ingestion endpoint. Supports PDF, Markdown, Text, and Images.
+    Extracts text and semantic meaning, chunks it, and adds to FAISS vector store.
+    """
+    vs = get_vector_store()
+    if not vs:
+        raise HTTPException(status_code=503, detail="Vector store not initialized.")
+
+    try:
+        # Save file temporarily
+        os.makedirs("data", exist_ok=True)
+        file_path = os.path.join("data", file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Import ingest processor (dynamic import to avoid path issues)
+        import sys
+        if os.path.abspath("src") not in sys.path:
+            sys.path.append(os.path.abspath("src"))
+        from ingest import process_file
+
+        # Process the file based on its extension
+        documents = process_file(file_path)
+
+        # Add to vector store
+        if documents:
+            await vs.add_documents(documents)
+
+        return {
+            "status": "success",
+            "message": f"Successfully ingested {file.filename}",
+            "chunks_added": len(documents)
+        }
+
+    except Exception as e:
+        print(f"[INGEST ERROR] {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

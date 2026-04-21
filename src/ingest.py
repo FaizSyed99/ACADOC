@@ -1,20 +1,25 @@
 """
-Ingestion Module: PDF → Semantic Chunks with Metadata
-Refactored to use PyMuPDF and Chapter/Topic detection from AcaDocAI.
+Ingestion Module: Unified Document Ingestion
+Supports: PDF, Markdown, Text, and Images (via Vision LLM).
 """
 
 import logging
 import re
+import os
+import base64
 import fitz  # PyMuPDF
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List
+
 from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def clean_text(text: str) -> str:
-    """Clean extracted text from PDF artifacts."""
     text = re.sub(r"(\w)(\w)", r"\1\2", text)
     text = re.sub(r"-\s+", "", text)
     text = re.sub(r"\n{2,}", "\n", text)
@@ -24,7 +29,6 @@ def is_chapter_keyword(line: str) -> bool:
     return line.strip() == "CHAPTER"
 
 def is_topic(line: str) -> bool:
-    """Detect if a line is a topic heading (All uppercase, specific length)."""
     return (
         line.isupper()
         and 2 <= len(line.split()) <= 10
@@ -42,23 +46,17 @@ def is_noise(line: str) -> bool:
     return False
 
 def ingest_pdf(pdf_path: str) -> List[Document]:
-    """
-    Main entry point: Load PDF → Detect Chapters/Topics → Return Documents.
-    Refactored with AcaDocAI logic for medical textbooks.
-    """
-    logger.info(f"Starting ingestion pipeline for: {pdf_path}")
+    """Ingest PDF documents using PyMuPDF."""
+    logger.info(f"Ingesting PDF: {pdf_path}")
     path = Path(pdf_path)
     if not path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
     doc = fitz.open(pdf_path)
-    
     current_chapter = "Unknown"
     current_topic = "General"
     current_content = []
-    
     documents = []
-    
     expecting_chapter_title = False
     chapter_number = None
 
@@ -69,12 +67,10 @@ def ingest_pdf(pdf_path: str) -> List[Document]:
             return
 
         content = " ".join(current_content).strip()
-        # Relaxed filter: capture any significant text block
         if len(content.split()) < 5:
             current_content = []
             return
 
-        # Create LangChain Document for compatibility
         doc_obj = Document(
             page_content=content,
             metadata={
@@ -97,7 +93,6 @@ def ingest_pdf(pdf_path: str) -> List[Document]:
             if not line or is_noise(line): continue
             if line.startswith("SECTION"): continue
 
-            # Chapter Detection
             if is_chapter_keyword(line):
                 expecting_chapter_title = True
                 continue
@@ -116,24 +111,116 @@ def ingest_pdf(pdf_path: str) -> List[Document]:
                 expecting_chapter_title = False
                 continue
 
-            # Topic Detection
             if is_topic(line):
                 flush_chunk(page_num)
                 current_topic = line
                 continue
 
-            # Content Accumulation
             current_content.append(line)
 
     flush_chunk(doc.page_count - 1)
-    logger.info(f"Ingestion complete: {len(documents)} structured chunks created.")
+    logger.info(f"Ingestion complete: {len(documents)} chunks created.")
     return documents
 
-if __name__ == "__main__":
-    # Quick test
-    test_pdf = "data/sample_pharma.pdf"
-    if Path(test_pdf).exists():
-        docs = ingest_pdf(test_pdf)
-        print(f"Test: Generated {len(docs)} chunks")
+def ingest_markdown(file_path: str) -> List[Document]:
+    """Ingest Markdown files preserving header structure."""
+    logger.info(f"Ingesting Markdown: {file_path}")
+    path = Path(file_path)
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    headers_to_split_on = [
+        ("#", "chapter"),
+        ("##", "topic"),
+        ("###", "subtopic"),
+    ]
+    markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+    md_header_splits = markdown_splitter.split_text(content)
+    
+    # Further split long sections
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    docs = text_splitter.split_documents(md_header_splits)
+    
+    for doc in docs:
+        doc.metadata["source"] = str(path.absolute())
+        doc.metadata["file_name"] = path.name
+        # Ensure chapter and topic exist
+        if "chapter" not in doc.metadata: doc.metadata["chapter"] = "Unknown"
+        if "topic" not in doc.metadata: doc.metadata["topic"] = "General"
+        
+    return docs
+
+def ingest_text(file_path: str) -> List[Document]:
+    """Ingest raw text files."""
+    logger.info(f"Ingesting Text: {file_path}")
+    path = Path(file_path)
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    docs = text_splitter.create_documents([content])
+    
+    for doc in docs:
+        doc.metadata = {
+            "source": str(path.absolute()),
+            "file_name": path.name,
+            "chapter": "Unknown",
+            "topic": "General"
+        }
+    return docs
+
+def encode_image(image_path: str) -> str:
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+def ingest_image(file_path: str) -> List[Document]:
+    """Ingest images using OpenAI Vision API to extract text and context."""
+    logger.info(f"Ingesting Image using Vision LLM: {file_path}")
+    path = Path(file_path)
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is required for image ingestion.")
+        
+    llm = ChatOpenAI(model="gpt-4o", max_tokens=1024, temperature=0.0)
+    
+    base64_image = encode_image(file_path)
+    
+    prompt = "Extract all text, labels, and structural information from this medical image, diagram, or page. Present it as clear text."
+    
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+        ]
+    )
+    
+    response = llm.invoke([message])
+    content = response.content if hasattr(response, 'content') else str(response)
+    
+    # Chunk the extracted text
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    docs = text_splitter.create_documents([content])
+    
+    for doc in docs:
+        doc.metadata = {
+            "source": str(path.absolute()),
+            "file_name": path.name,
+            "chapter": "Image Extraction",
+            "topic": "Diagram/Scan"
+        }
+    return docs
+
+def process_file(file_path: str) -> List[Document]:
+    """Unified router to ingest various file formats."""
+    ext = Path(file_path).suffix.lower()
+    if ext == '.pdf':
+        return ingest_pdf(file_path)
+    elif ext in ['.md', '.markdown']:
+        return ingest_markdown(file_path)
+    elif ext in ['.txt', '.csv']:
+        return ingest_text(file_path)
+    elif ext in ['.png', '.jpg', '.jpeg', '.webp']:
+        return ingest_image(file_path)
     else:
-        print(f"Test PDF not found at {test_pdf}")
+        raise ValueError(f"Unsupported file format: {ext}")

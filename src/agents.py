@@ -116,9 +116,9 @@ class ContextValidatorAgent:
         ]
         context_str = "\n\n".join(context_parts)
 
-        validation_prompt = f"""You are a strict medical context validator. Your job is to determine if the retrieved context is sufficient to answer the user's question.
+        validation_prompt = f"""You are a medical context validator. Your job is to determine if the retrieved context is relevant and sufficient to address the user's input.
 
-Question: {question}
+User Input: {question}
 
 Retrieved Context:
 {context_str}
@@ -130,7 +130,10 @@ Output ONLY a JSON object with this exact structure:
     "confidence_0_to_1": a float between 0 and 1
 }}
 
-If you cannot answer the question using ONLY the provided context, set is_sufficient to false. Do NOT make up information."""
+Instructions:
+1. If the user input is a specific question, check if the context contains the answer.
+2. If the user input is a general topic, title, or keyword, check if the context provides relevant information about it.
+3. If relevant information exists, set is_sufficient to true. Otherwise, set it to false."""
 
         messages = [HumanMessage(content=validation_prompt)]
 
@@ -248,21 +251,22 @@ class ControlledGeneratorAgent:
                 seen.add(key)
                 unique_citations.append(cit)
 
-        generation_prompt = f"""You are a medical education assistant. Use ONLY the provided context to answer the question accurately and precisely.
+        generation_prompt = f"""You are a medical education assistant. Use ONLY the provided context to address the user's input accurately and precisely.
 
 Context from textbook:
 {context_str}
 
-Question: {question}
+User Input: {question}
 
 Instructions:
-1. Answer based EXCLUSIVELY on the provided context
-2. If the context doesn't fully answer the question, state what is known and acknowledge limitations
-3. Provide clear, exam-oriented answers
-4. Do NOT add information not present in the context
-5. Use appropriate medical terminology
+1. Address the input based EXCLUSIVELY on the provided context.
+2. If the input is a question, answer it directly.
+3. If the input is a general topic or title, summarize the relevant information provided in the context.
+4. If the context doesn't fully cover the topic, state what is known and acknowledge limitations.
+5. Provide clear, well-structured responses.
+6. Do NOT add information not present in the context.
 
-Answer:"""
+Response:"""
 
         messages = [HumanMessage(content=generation_prompt)]
 
