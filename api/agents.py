@@ -2,6 +2,7 @@
 from typing import Any, List, Dict, Optional
 import logging
 import inspect
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,8 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
             return True, 0.85, f"Found authoritative definition phrase"
     
     # ✅ SECONDARY CHECK: Flexible keyword overlap
-    query_words = set(query.lower().split())
+    clean_query = re.sub(r'[^\w\s]', '', query.lower())
+    query_words = set(clean_query.split())
     stop_words = {"what", "is", "the", "concept", "of", "and", "in", "a", "an", "to", "for", "by"}
     important_words = query_words - stop_words
     
