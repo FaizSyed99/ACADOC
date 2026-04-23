@@ -24,8 +24,16 @@ st.set_page_config(
     layout="wide"
 )
 
+<<<<<<< HEAD
 @st.cache_resource
 def get_vector_store(pdf_path):
+=======
+
+@st.cache_resource
+def initialize_vector_store(
+    pdf_path: str, persist_dir: str = "faiss_index"
+) -> VectorStoreManager:
+>>>>>>> 8738cb31e78534196adf697a71c8e8ab4e4b2f10
     """
     Initializes or loads a FAISS vector store for a specific PDF.
     """
@@ -39,6 +47,7 @@ def get_vector_store(pdf_path):
         model_name="all-MiniLM-L6-v2"  # Ensure this matches your embedding model
     )
 
+<<<<<<< HEAD
     # Check if we need to ingest the file
     if not os.path.exists(os.path.join(persist_dir, "index.faiss")):
         with st.spinner(f"First-time indexing: {Path(pdf_path).name}..."):
@@ -52,6 +61,27 @@ def get_vector_store(pdf_path):
         logger.info(f"Loading existing index from {persist_dir}")
         manager.load()
     
+=======
+    os.makedirs(persist_dir, exist_ok=True)
+    index_path = os.path.join(persist_dir, "faiss_index.bin")
+    chunks_path = os.path.join(persist_dir, "chunks.json")
+
+    # Check if persistent store exists and has data
+    if Path(index_path).exists() and Path(chunks_path).exists():
+        try:
+            manager = VectorStoreManager(index_path=index_path, chunks_path=chunks_path)
+            if len(manager.chunks) > 0:
+                logger.info("Loaded existing vector store")
+                return manager
+        except Exception as e:
+            logger.warning(f"Could not load existing store: {e}")
+
+    # Create new index
+    documents = process_file(pdf_path)
+    manager = VectorStoreManager(index_path=index_path, chunks_path=chunks_path)
+    manager.add_documents(documents)
+    logger.info("Created new vector store index")
+>>>>>>> 8738cb31e78534196adf697a71c8e8ab4e4b2f10
     return manager
 
 def get_llm(provider="OpenAI", model="gpt-4o-mini"):
@@ -105,6 +135,7 @@ def main():
         st.sidebar.warning("Selected file not found in /data directory.")
         return
 
+<<<<<<< HEAD
     # --- FAISS Initialization ---
     vector_store = get_vector_store(selected_pdf)
     
@@ -118,6 +149,14 @@ def main():
         st.sidebar.success(f"Indexed {num_chunks} chunks")
     except:
         st.sidebar.info("Index loaded successfully")
+=======
+    # Initialize on first run
+    with st.spinner("Loading textbook index..."):
+        vector_store = initialize_vector_store(selected_pdf)
+        if vector_store is None:
+            st.stop()
+        st.sidebar.success(f"Indexed {len(vector_store.chunks)} chunks")
+>>>>>>> 8738cb31e78534196adf697a71c8e8ab4e4b2f10
 
     # LLM initialization
     llm_provider = st.sidebar.selectbox("LLM Provider", ["OpenAI", "Ollama"], index=1) # Default to Ollama given quota issues
