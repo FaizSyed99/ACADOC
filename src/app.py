@@ -27,9 +27,9 @@ st.set_page_config(
 )
 
 
-@st.cache_data
+@st.cache_resource
 def initialize_vector_store(
-    pdf_path: str, persist_dir: str = "chroma_db"
+    pdf_path: str, persist_dir: str = "faiss_index"
 ) -> VectorStoreManager:
     """
     Initialize or load vector store.
@@ -37,11 +37,15 @@ def initialize_vector_store(
     """
     logger.info(f"Initializing vector store from: {pdf_path}")
 
+    os.makedirs(persist_dir, exist_ok=True)
+    index_path = os.path.join(persist_dir, "faiss_index.bin")
+    chunks_path = os.path.join(persist_dir, "chunks.json")
+
     # Check if persistent store exists and has data
-    if Path(persist_dir).exists():
+    if Path(index_path).exists() and Path(chunks_path).exists():
         try:
-            manager = VectorStoreManager(persist_directory=persist_dir)
-            if manager.collection.count() > 0:
+            manager = VectorStoreManager(index_path=index_path, chunks_path=chunks_path)
+            if len(manager.chunks) > 0:
                 logger.info("Loaded existing vector store")
                 return manager
         except Exception as e:
@@ -49,7 +53,7 @@ def initialize_vector_store(
 
     # Create new index
     documents = process_file(pdf_path)
-    manager = VectorStoreManager(persist_dir + "/faiss_index.bin", persist_dir + "/chunks.json")
+    manager = VectorStoreManager(index_path=index_path, chunks_path=chunks_path)
     manager.add_documents(documents)
     logger.info("Created new vector store index")
     return manager
@@ -113,7 +117,9 @@ def main():
     # Initialize on first run
     with st.spinner("Loading textbook index..."):
         vector_store = initialize_vector_store(selected_pdf)
-        st.sidebar.success(f"Indexed {vector_store.collection.count()} chunks")
+        if vector_store is None:
+            st.stop()
+        st.sidebar.success(f"Indexed {len(vector_store.chunks)} chunks")
 
     # LLM initialization
     llm = get_llm()
