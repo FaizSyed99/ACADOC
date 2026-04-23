@@ -3,17 +3,28 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import sys
+import asyncio
 import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Import your agent pipeline and vector store
+# Ensure src/ is importable for VectorStoreManager and ingest
+_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+if _src_path not in sys.path:
+    sys.path.insert(0, _src_path)
+
+# Import agent pipeline — api/agents.py is async-capable with query expansion
 try:
     from .agents import run_pipeline, create_initial_state  # noqa: F401
-    from .vector_store import VectorStoreManager
 except ImportError:
-    from agents import run_pipeline
-    from .vector_store import VectorStoreManager
+    from agents import run_pipeline, create_initial_state  # noqa: F401
+
+# Import FAISS vector store from src/
+try:
+    from vector_store_faiss import VectorStoreManager
+except ImportError:
+    from src.vector_store_faiss import VectorStoreManager
 
 load_dotenv()
 
@@ -22,7 +33,7 @@ vector_store = None
 
 
 def get_vector_store():
-    """Singleton vector store initializer"""
+    """Singleton FAISS vector store initializer."""
     global vector_store
     if vector_store is None:
         try:
@@ -39,7 +50,6 @@ def get_llm():
     if openai_key and len(openai_key) > 10:
         try:
             from langchain_openai import ChatOpenAI
-
             return ChatOpenAI(
                 model=os.getenv("OPENAI_MODEL", "gpt-4o"),
                 api_key=openai_key,
@@ -51,7 +61,6 @@ def get_llm():
     # Fallback to Ollama
     try:
         from langchain_ollama import ChatOllama
-
         return ChatOllama(
             model=os.getenv("OLLAMA_MODEL", "gemma2:9b"),
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
@@ -86,6 +95,7 @@ async def chat(request: QueryRequest):
     """
     Main chat endpoint implementing Technical Plan §4, §8, §9:
     Retrieve → Validate → Generate pipeline with source-backed outputs.
+    api/agents.py run_pipeline is async; supports query expansion + dedup.
     """
     llm = get_llm()
     vs = get_vector_store()
@@ -97,10 +107,9 @@ async def chat(request: QueryRequest):
         )
 
     try:
-        # Execute the agent pipeline (Technical Plan §8: coordinated specialized agents)
+        # api/agents.run_pipeline is async — await directly
         result = await run_pipeline(request.question, vs, llm)
 
-        # Map pipeline output to API response (Technical Plan §3: textbook grounding)
         return QueryResponse(
             answer=result.get("answer", "No answer generated"),
             citations=[
@@ -118,20 +127,21 @@ async def chat(request: QueryRequest):
 
     except Exception as e:
         print(f"[CHAT ERROR] {type(e).__name__}: {str(e)}")
-        # Technical Plan §9: fail gracefully, never hallucinate
         raise HTTPException(status_code=500, detail=f"Pipeline Error: {str(e)}")
 
 
 @app.get("/api/health")
 async def health():
-    """Health check for load balancers / monitoring"""
+    """Health check for load balancers / monitoring."""
     vs_status = "connected" if vector_store else "not_initialized"
     return {"status": "healthy", "service": "AcaDoc AI", "vector_store": vs_status}
+
+
 @app.post("/api/ingest")
 async def ingest_file(file: UploadFile = File(...)):
     """
     Unified ingestion endpoint. Supports PDF, Markdown, Text, and Images.
-    Extracts text and semantic meaning, chunks it, and adds to FAISS vector store.
+    Extracts text, chunks semantically, and adds to FAISS vector store.
     """
     vs = get_vector_store()
     if not vs:
@@ -144,28 +154,27 @@ async def ingest_file(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Import ingest processor (dynamic import to avoid path issues)
-        import sys
-        if os.path.abspath("src") not in sys.path:
-            sys.path.append(os.path.abspath("src"))
+        # Import ingest processor (src/ already on sys.path)
         from ingest import process_file
 
         # Process the file based on its extension
         documents = process_file(file_path)
 
-        # Add to vector store
+        # VectorStoreManager.add_documents is sync — run in executor to avoid blocking
         if documents:
-            await vs.add_documents(documents)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, vs.add_documents, documents)
 
         return {
             "status": "success",
             "message": f"Successfully ingested {file.filename}",
-            "chunks_added": len(documents)
+            "chunks_added": len(documents) if documents else 0,
         }
 
     except Exception as e:
         print(f"[INGEST ERROR] {type(e).__name__}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn

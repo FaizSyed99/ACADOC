@@ -1,79 +1,79 @@
-"""
-Streamlit UI: AcaDoc AI POC Interface
-Technical Plan v1.2 Section 8: Agent Architecture + UI Integration
-"""
-
 import logging
 import os
+import hashlib
 from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 
-# Load environment variables
-load_dotenv()
-
+# Import your local modules
 from ingest import process_file
 from vector_store_faiss import VectorStoreManager
 from agents import run_pipeline, AgentState
 
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Page config
 st.set_page_config(
-    page_title="AcaDoc AI - Medical Education Assistant", page_icon="🏥", layout="wide"
+    page_title="AcaDoc AI - Medical Education Assistant", 
+    page_icon="🏥", 
+    layout="wide"
 )
 
-
-@st.cache_data
-def initialize_vector_store(
-    pdf_path: str, persist_dir: str = "chroma_db"
-) -> VectorStoreManager:
+@st.cache_resource
+def get_vector_store(pdf_path):
     """
-    Initialize or load vector store.
-    Cached to avoid re-indexing on every interaction.
+    Initializes or loads a FAISS vector store for a specific PDF.
     """
-    logger.info(f"Initializing vector store from: {pdf_path}")
+    # Create a unique ID for the file to prevent index collisions
+    file_hash = hashlib.md5(pdf_path.encode()).hexdigest()[:10]
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    persist_dir = os.path.join(base_dir, "..", "faiss_index", file_hash)
+    
+    manager = VectorStoreManager(
+        persist_dir=persist_dir,
+        model_name="all-MiniLM-L6-v2"  # Ensure this matches your embedding model
+    )
 
-    # Check if persistent store exists and has data
-    if Path(persist_dir).exists():
-        try:
-            manager = VectorStoreManager(persist_directory=persist_dir)
-            if manager.collection.count() > 0:
-                logger.info("Loaded existing vector store")
-                return manager
-        except Exception as e:
-            logger.warning(f"Could not load existing store: {e}")
-
-    # Create new index
-    documents = process_file(pdf_path)
-    manager = VectorStoreManager(persist_dir + "/faiss_index.bin", persist_dir + "/chunks.json")
-    manager.add_documents(documents)
-    logger.info("Created new vector store index")
+    # Check if we need to ingest the file
+    if not os.path.exists(os.path.join(persist_dir, "index.faiss")):
+        with st.spinner(f"First-time indexing: {Path(pdf_path).name}..."):
+            logger.info(f"Indexing new file: {pdf_path}")
+            chunks = process_file(pdf_path)
+            if not chunks:
+                st.error("Failed to extract text from PDF.")
+                return None
+            manager.add_documents(chunks)
+    else:
+        logger.info(f"Loading existing index from {persist_dir}")
+        manager.load()
+    
     return manager
 
-
-def get_llm():
-    """
-    Initialize LLM with strict settings for medical accuracy.
-    Temperature = 0.0 (deterministic, per Technical Plan)
-    """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        st.error("OPENAI_API_KEY not set in environment")
-        return None
-
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
-    logger.info("LLM initialized with temperature=0.0")
-    return llm
-
+def get_llm(provider="OpenAI", model="gpt-4o-mini"):
+    if provider == "OpenAI":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            st.error("OPENAI_API_KEY not set in environment")
+            return None
+        return ChatOpenAI(model=model, temperature=0.0)
+    else:
+        # Ollama (Local or Hosted)
+        ollama_key = os.getenv("OLLAMA_API_KEY")
+        logger.info(f"Using Ollama model: {model} (Key present: {bool(ollama_key)})")
+        
+        # If there's an API key, it might be a hosted service requiring headers
+        # Otherwise, standard local ChatOllama works
+        return ChatOllama(
+            model=model, 
+            temperature=0.0,
+        )
 
 def main():
-    """Main Streamlit application."""
-
-    # Header
     st.title("🏥 AcaDoc AI")
     st.markdown("*Medical Education Assistant - Proof of Concept*")
     st.markdown("---")
@@ -81,113 +81,95 @@ def main():
     # Sidebar: Configuration
     st.sidebar.header("Configuration")
 
-    # PDF Upload or Selection
-    uploaded_file = st.sidebar.file_uploader("Upload Medical Reference", type=["pdf", "md", "txt", "png", "jpg", "jpeg"], help="Upload a new file to analyze")
+    uploaded_file = st.sidebar.file_uploader(
+        "Upload Medical Reference", 
+        type=["pdf", "md", "txt"], 
+        help="Upload a new file to analyze"
+    )
     
-    if uploaded_file is not None:
+    if uploaded_file:
         os.makedirs("data", exist_ok=True)
-        # Save the uploaded file to disk so ingest.py can load it
         pdf_path = os.path.join("data", uploaded_file.name)
         with open(pdf_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         selected_pdf = pdf_path
-        st.sidebar.success(f"Successfully uploaded {uploaded_file.name}")
     else:
+        # Define paths clearly
         pdf_options = [
-            r"AcaDocAI/Grays_Anatomy_Extracted_2.pdf",
-            r"C:\Users\MUFAQHAM\Downloads\Gray's Anatomy .pdf", 
+            "data/Grays_Anatomy_Extracted_2.pdf",
             "data/sample_pharma.pdf"
         ]
-        selected_pdf = st.sidebar.selectbox(
-            "Or Select an Existing Textbook",
-            pdf_options,
-            help="Select which medical textbook to use for grounding",
-        )
+        selected_pdf = st.sidebar.selectbox("Or Select Existing Textbook", pdf_options)
 
-    # Check PDF exists
     if not Path(selected_pdf).exists():
-        st.error(f"PDF not found: {selected_pdf}")
-        st.info("Place a PDF file in the data/ directory")
+        st.sidebar.warning("Selected file not found in /data directory.")
         return
 
-    # Initialize on first run
-    with st.spinner("Loading textbook index..."):
-        vector_store = initialize_vector_store(selected_pdf)
-        st.sidebar.success(f"Indexed {vector_store.collection.count()} chunks")
+    # --- FAISS Initialization ---
+    vector_store = get_vector_store(selected_pdf)
+    
+    if vector_store is None:
+        st.error("Vector store initialization failed.")
+        st.stop()
+
+    # Get count for display (Update this according to your VectorStoreManager attributes)
+    try:
+        num_chunks = vector_store.index.ntotal
+        st.sidebar.success(f"Indexed {num_chunks} chunks")
+    except:
+        st.sidebar.info("Index loaded successfully")
 
     # LLM initialization
-    llm = get_llm()
-    if not llm:
-        st.warning("Configure OPENAI_API_KEY to enable answer generation")
-        return
+    llm_provider = st.sidebar.selectbox("LLM Provider", ["OpenAI", "Ollama"], index=1) # Default to Ollama given quota issues
+    
+    if llm_provider == "OpenAI":
+        llm_model = "gpt-4o-mini"
+    else:
+        default_model = os.getenv("OLLAMA_MODEL", "llama3")
+        llm_model = st.sidebar.text_input("Ollama Model", value=default_model)
+        st.sidebar.info(f"Using model: {llm_model}")
+
+    llm = get_llm(provider=llm_provider, model=llm_model)
+    if not llm: return
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Guardrails Active:**")
-    st.sidebar.markdown("• Temperature = 0.0")
-    st.sidebar.markdown("• Context validation enforced")
-    st.sidebar.markdown("• Fallback on insufficient evidence")
+    st.sidebar.markdown("**Guardrails:**\n- Temp: 0.0\n- Context: Strict")
 
-    # Main content: Question input
+    # Main UI
     st.header("Ask a Medical Question")
+    question = st.text_input("Enter your question:", placeholder="e.g., Describe the anatomy of the heart.")
 
-    question = st.text_input(
-        "Enter your question:",
-        placeholder="e.g., What is the mechanism of action of aspirin?",
-        help="Questions are grounded in the selected textbook",
-    )
-
-    # Process question
     if question:
-        with st.spinner("Processing through 3-agent pipeline..."):
-            logger.info(f"Processing question: {question}")
-
-            # Run pipeline
+        with st.spinner("Analyzing medical context..."):
+            # Ensure your run_pipeline accepts the manager and the llm
             result = run_pipeline(question, vector_store, llm)
 
-            # Display results
             st.markdown("---")
             st.header("Answer")
 
-            # Validation indicator
-            confidence = result.get("validation_confidence", 0.0)
+            # Validation Metadata
             is_sufficient = result.get("validated_context") == "SUFFICIENT"
-
             if is_sufficient:
-                st.success(f"✓ Context Validated (Confidence: {confidence:.1%})")
+                st.success(f"✓ Context Validated")
             else:
-                st.warning("⚠ Insufficient Context - Using Fallback")
+                st.warning("⚠ Fallback used: Information not found in source.")
 
-            # Answer display
             st.markdown(result.get("answer", "No answer generated"))
 
-            # Citations panel
+            # Citations
             citations = result.get("citations", [])
             if citations:
-                st.markdown("---")
-                with st.expander("📚 Source Citations", expanded=True):
+                with st.expander("📚 Source Citations"):
                     for i, cit in enumerate(citations, 1):
-                        file_name = Path(cit.get("file_name", "")).name
-                        st.markdown(
-                            f"**[{i}]** {file_name} - Page {cit.get('page', '?')}"
-                        )
-            else:
-                st.info("No citations available (fallback response)")
+                        st.markdown(f"**[{i}]** Page {cit.get('page', 'N/A')}")
 
-            # Debug: Show retrieved chunks (collapsible)
+            # Debug
             with st.expander("🔍 Debug: Retrieved Context"):
                 chunks = result.get("retrieved_chunks", [])
                 for i, chunk in enumerate(chunks, 1):
-                    meta = chunk.get("metadata", {})
-                    st.markdown(f"**Chunk {i}** (Page {meta.get('page', '?')}):")
-                    st.text(chunk.get("content", "")[:500] + "...")
-
-            # Validation details
-            val_result = result.get("validation_result")
-            if val_result:
-                st.markdown("---")
-                with st.expander("🔐 Validation Details"):
-                    st.json(val_result)
-
+                    content = getattr(chunk, 'page_content', str(chunk))
+                    st.markdown(f"**Chunk {i}:**")
+                    st.text(content[:300] + "...")
 
 if __name__ == "__main__":
     main()
