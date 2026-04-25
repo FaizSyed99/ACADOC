@@ -1,15 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  rewrites: async () => {
+  allowedDevOrigins: ["192.168.56.1"],
+  async rewrites() {
     return [
       {
-        source: "/api/chat",
-        destination: "http://127.0.0.1:8000/api/chat",
-      },
-      {
-        source: "/api/health",
-        destination: "http://127.0.0.1:8000/api/health",
+        source: "/api/:path*",
+        destination: "http://127.0.0.1:8000/api/:path*",
       },
     ];
   },
