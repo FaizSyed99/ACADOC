@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "../../../src/lib/auth";
-import { ShieldCheck, Users, ClipboardList, LogOut } from "lucide-react";
+import { ShieldCheck, Users, ClipboardList, LogOut, Microscope } from "lucide-react";
 import Link from "next/link";
 
 /**
@@ -10,7 +10,7 @@ import Link from "next/link";
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  
+
   // Guard clause: Redirect to signin if not an authenticated admin
   if (!session || (session.user as any).role !== 'admin') {
     redirect("/signin");
@@ -26,14 +26,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
           <span className="font-bold text-slate-900 tracking-tight">Admin Console</span>
         </div>
-        
+
         <nav className="flex-1 p-4 space-y-1 mt-4">
           {[
             { name: 'Users', icon: Users, href: '/admin/users' },
             { name: 'Moderation', icon: ClipboardList, href: '/admin/reviews' },
+            { name: 'Research', icon: Microscope, href: '/admin/research' },
           ].map((item) => (
-            <Link 
-              key={item.name} 
+            <Link
+              key={item.name}
               href={item.href}
               className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-blue-600 rounded-xl transition-all font-semibold text-sm group"
             >
