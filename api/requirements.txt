@@ -19,5 +19,5 @@ google-generativeai==0.3.2
 httpx==0.26.0
 
 # SurrealDB
-surrealdb==0.11.0
+surrealdb==1.0.8
 websockets==12.0
