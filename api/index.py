@@ -746,6 +746,11 @@ async def chat(request: ChatRequest):
 
 
 # Keep old endpoint for backward compatibility during transition
+class QueryRequest(BaseModel):
+    question: str
+    subject: Optional[str] = "Community Medicine"
+    intent: Optional[str] = "Revise"
+
 @app.post("/api/chat/legacy", response_model=QueryResponse, deprecated=True)
 async def chat_legacy(request: QueryRequest):
     """

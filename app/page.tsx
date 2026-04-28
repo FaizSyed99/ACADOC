@@ -52,7 +52,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          question: input,
+          query: input,
           subject: subject,
           intent: intent
         }),

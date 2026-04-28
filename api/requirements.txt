@@ -1,0 +1,23 @@
+# api/requirements.txt
+fastapi==0.109.2
+uvicorn==0.27.1
+pydantic==2.6.1
+python-dotenv==1.0.1
+
+# RAG
+langchain==0.1.9
+chromadb==0.4.22
+pypdf==4.0.2
+
+# Embeddings
+sentence-transformers==2.3.1
+
+# Google API
+google-generativeai==0.3.2
+
+# HTTP
+httpx==0.26.0
+
+# SurrealDB
+surrealdb==0.11.0
+websockets==12.0
