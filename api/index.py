@@ -28,11 +28,11 @@ try:
 except ImportError:
     from agents import run_pipeline, create_initial_state  # noqa: F401
 
-# Import FAISS vector store from src/
+# Import vector store (SurrealDB Cloud)
 try:
-    from vector_store_faiss import VectorStoreManager
+    from .vector_store import VectorStoreManager
 except ImportError:
-    from src.vector_store_faiss import VectorStoreManager
+    from vector_store import VectorStoreManager
 
 load_dotenv()
 
@@ -290,18 +290,18 @@ def get_vector_store():
 
 
 def get_llm():
-    """Model Factory: Tries OpenAI first, falls back to Ollama. Temperature=0 for determinism (§9)."""
-    openai_key = os.getenv("OPENAI_API_KEY")
-    if openai_key and len(openai_key) > 10:
+    """Model Factory: Uses Gemini with Temperature=0 for determinism (§9)."""
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key and len(gemini_key) > 10:
         try:
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
-                api_key=openai_key,
-                temperature=0.0,  # §9: near-zero hallucination tolerance
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            return ChatGoogleGenerativeAI(
+                model="gemini-2.5-flash",
+                google_api_key=gemini_key,
+                temperature=0.0,
             )
         except (ImportError, Exception) as e:
-            print(f"[WARN] OpenAI init failed: {e}. Falling back to Ollama...")
+            print(f"[WARN] Gemini init failed: {e}. Falling back to Ollama...")
 
     # Fallback to Ollama
     try:
@@ -309,7 +309,7 @@ def get_llm():
         return ChatOllama(
             model=os.getenv("OLLAMA_MODEL", "gemma2:9b"),
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            temperature=0.0,  # §9: deterministic medical outputs
+            temperature=0.0,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"No LLM provider available: {e}")
@@ -451,7 +451,9 @@ def format_laq_answer(answer_text: str, subject: str, textbook: str) -> str:
 📚 DEFINITION
 [The following information is provided based on retrieved context:]
 
-{answer_text}
+    try:
+        # api/agents.run_pipeline is async — await directly
+        result = await run_pipeline(request.question, vs, llm, request.subject, request.intent)
 
 ---
 💡 NOTE: For complete LAQ format, structure your answer as:
