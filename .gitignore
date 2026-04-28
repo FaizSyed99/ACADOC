@@ -1,1 +1,44 @@
-Nothing should be ignored in this case, as the changes only include source files (.sql, .py) and no build artifacts, dependencies, or temporary files.
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/
+out/
+build/
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Vector Store / Local DB
+chroma_db/
+faiss_index/
+*.db
+*.bin
+*.json
+
+# Environment Variables
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Source Data / Extracted Zips
+AcaDocAI/
+data/*.pdf
