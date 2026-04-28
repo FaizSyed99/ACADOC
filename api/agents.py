@@ -180,9 +180,9 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
         elif intent == "Notes":
             intent_instructions = "Format the answer as high-yield, extremely concise bullet points for quick revision."
 
-        prompt = f"""You are AcaDoc AI, a textbook-grounded medical tutor acting as a friendly study buddy for a 3rd Year MBBS student.
+        prompt = f"""You are AcaDoc AI, a textbook-grounded medical tutor for a 3rd Year MBBS student.
 Address the user input using ONLY the provided context. If information is missing, state so explicitly.
-Keep your tone friendly, encouraging, and slightly humorous.
+Keep your tone academic, slightly humorous, professional, and clinical.
 
 Subject: {subject}
 Study Mode: {intent}
