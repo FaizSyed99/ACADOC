@@ -109,7 +109,7 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
 # MAIN PIPELINE
 # ==============================================================================
 
-async def run_pipeline(question: str, vector_store, llm) -> dict:
+async def run_pipeline(question: str, vector_store, llm, subject: str = "Community Medicine", intent: str = "Revise") -> dict:
     """
     Main async pipeline for AcaDoc AI.
     """
@@ -172,9 +172,20 @@ async def run_pipeline(question: str, vector_store, llm) -> dict:
             for c in retrieved
         ])
         
-        prompt = f"""You are AcaDoc AI, a textbook-grounded medical tutor.
-Address the user input using ONLY the provided context. If information is missing, state so explicitly.
+        intent_instructions = ""
+        if intent == "Revise":
+            intent_instructions = "Format the answer as a Long Answer Question (LAQ) structure: Definition -> Classification -> Pathophysiology -> Clinical -> Management."
+        elif intent == "Test":
+            intent_instructions = "Format the answer as a quick test. Provide the core fact and then ask a brief follow-up question to test the student."
+        elif intent == "Notes":
+            intent_instructions = "Format the answer as high-yield, extremely concise bullet points for quick revision."
 
+        prompt = f"""You are AcaDoc AI, a textbook-grounded medical tutor acting as a friendly study buddy for a 3rd Year MBBS student.
+Address the user input using ONLY the provided context. If information is missing, state so explicitly.
+Keep your tone friendly, encouraging, and slightly humorous.
+
+Subject: {subject}
+Study Mode: {intent}
 User Input: {question}
 
 Context:
@@ -182,8 +193,9 @@ Context:
 
 Instructions:
 1. Answer directly based on the context.
-2. Do NOT add outside information.
-3. If the context is insufficient, state what is missing.
+2. {intent_instructions}
+3. Do NOT add outside information not found in the context.
+4. If the context is insufficient, state what is missing.
 
 Response:"""
 

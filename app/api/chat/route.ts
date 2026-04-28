@@ -1,7 +1,7 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
+const API_URL = process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
     try {
