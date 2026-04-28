@@ -1,5 +1,5 @@
 # api/requirements.txt
-fastapi==0.109.2
+fastapi==0.95.2
 uvicorn==0.27.1
 pydantic==1.10.13
 python-dotenv==1.0.1
