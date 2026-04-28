@@ -1,23 +1,25 @@
-# api/requirements.txt
-fastapi==0.95.2
-uvicorn==0.27.1
-pydantic==1.10.13
+# === CORE (Compatible Stack) ===
+fastapi==0.104.1          # ← Sweet spot: modern features, pydantic v1 compatible
+pydantic==1.10.13         # ← Pure Python, no Rust
 python-dotenv==1.0.1
+uvicorn==0.23.2
 
-# RAG
-langchain==0.1.9
-chromadb==0.4.22
-pypdf==4.0.2
+# === RAG (Minimal, Stable) ===
+langchain==0.0.340        # ← Last version before major breaking changes
+chromadb==0.4.18          # ← Compatible with langchain 0.0.x
+pypdf==3.17.4             # ← Stable PDF parsing
 
-# Embeddings
-sentence-transformers==2.3.1
+# === Embeddings (CPU-Friendly) ===
+sentence-transformers==2.2.2
+torch==2.0.1 --extra-index-url https://download.pytorch.org/whl/cpu
 
-# Google API
+# === Google API ===
 google-generativeai==0.3.2
 
-# HTTP
-httpx==0.26.0
+# === HTTP/Utils ===
+httpx==0.24.1
+requests==2.31.0
 
-# SurrealDB
+# === SurrealDB ===
 surrealdb==1.0.8
-websockets==12.0
+websockets==11.0.3
