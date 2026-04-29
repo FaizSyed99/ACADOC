@@ -13,6 +13,7 @@ PyMuPDF==1.23.8
 # === Embeddings (CPU-Friendly) ===
 sentence-transformers==2.2.2
 faiss-cpu==1.7.4
+huggingface-hub==0.23.0
 
 # === Google API & OpenAI ===
 google-generativeai==0.3.2
