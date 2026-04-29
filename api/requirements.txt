@@ -2,6 +2,7 @@
 fastapi>=0.136.0
 pydantic>=2.13.2
 python-dotenv>=1.2.2
+python-multipart>=0.0.27
 uvicorn>=0.44.0
 
 # === RAG & Data ===
