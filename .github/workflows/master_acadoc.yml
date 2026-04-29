@@ -22,7 +22,7 @@ jobs:
       - name: Set up Python version
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3'
 
       # 🛠️ Local Build Section (Optional)
       # The following section in your workflow is designed to catch build issues early on the client side, before deployment. This can be helpful for debugging and validation. However, if this step significantly increases deployment time and early detection is not critical for your workflow, you may remove this section to streamline the deployment process.
@@ -63,9 +63,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_DFFC33B57EBF4CC4941EA283D816C3F9 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_199769C45208425A8191D576BD6D5CF8 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_8A046D2DC9034674BA2CAA25E473A899 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_97C5048AA679432384CCF1F0B93A1793 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_AF4308393B9B433C9803EAFFB60F953E }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_353FFE77BDF24ECAAF2EEF921F2A3E9A }}
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
