@@ -220,8 +220,18 @@ Response:"""
         
     except Exception as e:
         logger.error(f"[PIPELINE ERROR] {type(e).__name__}: {str(e)}")
+        
+        # Professional fallback messaging for students
+        error_msg = str(e).lower()
+        if "rate limit" in error_msg or "429" in error_msg or "quota" in error_msg or "too many requests" in error_msg:
+            user_msg = "Our academic servers are currently experiencing unusually high traffic from other students. Please take a short break and try your query again in a few moments."
+        elif "timeout" in error_msg or "deadline" in error_msg or "503" in error_msg or "504" in error_msg:
+            user_msg = "The textbook retrieval and analysis process took longer than expected. Please try asking a more specific question, or try again in a minute."
+        else:
+            user_msg = "We encountered an unexpected technical issue while analyzing the textbook data. Please try again, or switch to a different topic if the issue persists."
+            
         return {
-            "answer": "⚠️ An internal error occurred.",
+            "answer": f"⚠️ **Service Disruption**\n\n{user_msg}",
             "validated_context": "ERROR",
             "validation_confidence": 0.0,
             "validation_result": {"reason": str(e)}

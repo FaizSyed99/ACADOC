@@ -310,16 +310,50 @@ def get_vector_store():
 def get_llm():
     """Model Factory: Uses Gemini with Temperature=0 for determinism (§9)."""
     gemini_key = os.getenv("GEMINI_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    
     if gemini_key and len(gemini_key) > 10:
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
-            return ChatGoogleGenerativeAI(
+            
+            # Primary Model: Fast, cost-effective
+            primary_llm = ChatGoogleGenerativeAI(
                 model="gemini-2.5-flash",
                 google_api_key=gemini_key,
                 temperature=0.0,
+                max_retries=1
             )
+            
+            fallbacks = []
+            
+            # Fallback 1: High capacity, slightly slower (handles rate limits on flash)
+            fallback_1 = ChatGoogleGenerativeAI(
+                model="gemini-2.5-pro",
+                google_api_key=gemini_key,
+                temperature=0.0,
+                max_retries=1
+            )
+            fallbacks.append(fallback_1)
+            
+            # Fallback 2: Cross-provider fallback if Google API is completely down
+            if openai_key and len(openai_key) > 10:
+                try:
+                    from langchain_openai import ChatOpenAI
+                    fallback_2 = ChatOpenAI(
+                        model="gpt-4o-mini",
+                        api_key=openai_key,
+                        temperature=0.0,
+                        max_retries=1
+                    )
+                    fallbacks.append(fallback_2)
+                except ImportError:
+                    pass
+                    
+            # Return resilient chain
+            return primary_llm.with_fallbacks(fallbacks)
+            
         except (ImportError, Exception) as e:
-            print(f"[WARN] Gemini init failed: {e}. Falling back to Ollama...")
+            logger.warning(f"[WARN] Gemini init failed: {e}. Falling back to local Ollama...")
 
     # Fallback to Ollama
     try:
