@@ -13,7 +13,7 @@ from typing import List
 
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
-from langchain_openai import ChatOpenAI
+from langchain.chat_models import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 logging.basicConfig(level=logging.INFO)

@@ -26,13 +26,13 @@ if _src_path not in sys.path:
 try:
     from .agents import run_pipeline, create_initial_state  # noqa: F401
 except ImportError:
-    from agents import run_pipeline, create_initial_state  # noqa: F401
+    from api.agents import run_pipeline, create_initial_state  # noqa: F401
 
 # Import vector store (SurrealDB Cloud)
 try:
     from .vector_store import VectorStoreManager
 except ImportError:
-    from vector_store import VectorStoreManager
+    from api.vector_store import VectorStoreManager
 
 load_dotenv()
 
