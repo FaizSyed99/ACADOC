@@ -53,7 +53,12 @@ async def lifespan(application: FastAPI):
     yield
     logger.info("[SHUTDOWN] Server shutting down.")
 
-app = FastAPI(title="AcaDoc AI API", lifespan=lifespan)
+app = FastAPI(
+    title="AcaDoc AI API", 
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json"
+)
 
 # =============================================================================
 # TECHNICAL PLAN v1.2: SYSTEM PROMPT LIBRARY
