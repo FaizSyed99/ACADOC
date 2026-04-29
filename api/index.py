@@ -17,22 +17,18 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Ensure src/ is importable for VectorStoreManager and ingest
-_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-if _src_path not in sys.path:
-    sys.path.insert(0, _src_path)
-
-# Import agent pipeline — api/agents.py is async-capable with query expansion
+# Import agent pipeline and vector store FIRST to prevent path shadowing
 try:
     from .agents import run_pipeline, create_initial_state  # noqa: F401
-except ImportError:
-    from api.agents import run_pipeline, create_initial_state  # noqa: F401
-
-# Import vector store (SurrealDB Cloud)
-try:
     from .vector_store import VectorStoreManager
 except ImportError:
-    from api.vector_store import VectorStoreManager
+    from agents import run_pipeline, create_initial_state  # noqa: F401
+    from vector_store import VectorStoreManager
+
+# NOW ensure src/ is importable for ingest.py
+_src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+if _src_path not in sys.path:
+    sys.path.append(_src_path)  # Use append instead of insert(0) to prevent shadowing
 
 load_dotenv()
 
