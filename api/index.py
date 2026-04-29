@@ -273,14 +273,20 @@ SUBJECT_TEXTBOOK_MAP = {
 }
 
 
+vector_store_error = None
+
 def get_vector_store():
     """Singleton FAISS vector store initializer."""
     global vector_store
+    global vector_store_error
     if vector_store is None:
         try:
             vector_store = VectorStoreManager()
+            vector_store_error = None
         except Exception as e:
-            print(f"[ERROR] Vector store init failed: {e}")
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            print(f"[ERROR] Vector store init failed: {error_msg}")
+            vector_store_error = error_msg
             return None
     return vector_store
 
@@ -361,11 +367,6 @@ class QueryResponse(BaseModel):
 SOFT_TOKEN_LIMIT = 4000  # Warn user
 HARD_TOKEN_LIMIT = 6000  # Force new session
 
-
-# =============================================================================
-# HELPER FUNCTIONS FOR 3RD YEAR MBBS API
-# Technical Plan: §3, §4, §8, §9, §10
-# =============================================================================
 
 def get_system_prompt(subject: str, intent: str) -> str:
     """
@@ -768,7 +769,12 @@ async def chat_legacy(request: QueryRequest):
 async def health():
     """Health check for load balancers / monitoring."""
     vs_status = "connected" if vector_store else "not_initialized"
-    return {"status": "healthy", "service": "AcaDoc AI", "vector_store": vs_status}
+    return {
+        "status": "healthy", 
+        "service": "AcaDoc AI", 
+        "vector_store": vs_status,
+        "vector_store_error": vector_store_error if vs_status == "not_initialized" else None
+    }
 
 
 @app.post("/api/ingest")
