@@ -60,10 +60,6 @@ app = FastAPI(
     openapi_url="/api/openapi.json"
 )
 
-# =============================================================================
-# TECHNICAL PLAN v1.2: SYSTEM PROMPT LIBRARY
-# 4 Subjects × 3 Intents = 12 Variants (§3, §8, §10)
-# =============================================================================
 
 SYSTEM_PROMPTS = {
     # ==================== COMMUNITY MEDICINE (PSM) ====================
