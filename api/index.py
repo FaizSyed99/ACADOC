@@ -32,8 +32,28 @@ if _src_path not in sys.path:
 
 load_dotenv()
 
-app = FastAPI(title="AcaDoc AI API")
+from contextlib import asynccontextmanager
+
+# Global singletons
 vector_store = None
+vector_store_error = None
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Initialize the vector store once at server startup."""
+    global vector_store, vector_store_error
+    logger.info("[STARTUP] Initializing vector store...")
+    try:
+        vector_store = VectorStoreManager()
+        vector_store_error = None
+        logger.info(f"[STARTUP] Vector store ready with {len(vector_store.chunks)} chunks.")
+    except Exception as e:
+        vector_store_error = f"{type(e).__name__}: {str(e)}"
+        logger.error(f"[STARTUP] Vector store failed: {vector_store_error}")
+    yield
+    logger.info("[SHUTDOWN] Server shutting down.")
+
+app = FastAPI(title="AcaDoc AI API", lifespan=lifespan)
 
 # =============================================================================
 # TECHNICAL PLAN v1.2: SYSTEM PROMPT LIBRARY
@@ -273,20 +293,16 @@ SUBJECT_TEXTBOOK_MAP = {
 }
 
 
-vector_store_error = None
-
 def get_vector_store():
-    """Singleton FAISS vector store initializer."""
-    global vector_store
-    global vector_store_error
+    """Returns the globally initialized vector store. Falls back to lazy init if lifespan was skipped."""
+    global vector_store, vector_store_error
     if vector_store is None:
         try:
             vector_store = VectorStoreManager()
             vector_store_error = None
         except Exception as e:
-            error_msg = f"{type(e).__name__}: {str(e)}"
-            print(f"[ERROR] Vector store init failed: {error_msg}")
-            vector_store_error = error_msg
+            vector_store_error = f"{type(e).__name__}: {str(e)}"
+            logger.error(f"[ERROR] Vector store init failed: {vector_store_error}")
             return None
     return vector_store
 
@@ -768,10 +784,12 @@ async def chat_legacy(request: QueryRequest):
 @app.get("/api/health")
 async def health():
     """Health check for load balancers / monitoring."""
+    # Always try to initialize if not yet done
+    get_vector_store()
     vs_status = "connected" if vector_store else "not_initialized"
     return {
-        "status": "healthy", 
-        "service": "AcaDoc AI", 
+        "status": "healthy",
+        "service": "AcaDoc AI",
         "vector_store": vs_status,
         "vector_store_error": vector_store_error if vs_status == "not_initialized" else None
     }
