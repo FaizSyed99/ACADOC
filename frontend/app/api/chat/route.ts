@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const rawUrl = process.env.BACKEND_API_URL || process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
 const API_URL = rawUrl.replace(/\/$/, '');
 
+// Allow Vercel up to 60 seconds to wait for Render's cold start
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
