@@ -11,12 +11,8 @@ const pass = process.env.SURREALDB_PASS;
 const ns = process.env.SURREALDB_NS;
 const database = process.env.SURREALDB_DB;
 
-// Validate environment variables at runtime
-if (!url || !user || !pass || !ns || !database) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('❌ Missing SurrealDB environment variables in .env');
-  }
-}
+// Environment variables will be validated inside initDb()
+// to prevent Vercel from crashing during static compilation.
 
 // Use globalThis for better cross-environment singleton support in Next.js
 const globalForSurreal = globalThis as unknown as { surreal: Surreal };
@@ -35,6 +31,11 @@ export async function initDb(): Promise<Surreal> {
   const currentPass = pass || 'root';
   const currentNs = ns || 'acadoc';
   const currentDb = database || 'prod';
+
+  if (process.env.NODE_ENV === 'production' && (!url || !user || !pass || !ns || !database)) {
+    console.error('❌ Missing SurrealDB environment variables in Vercel');
+    throw new Error('Database configuration missing at runtime.');
+  }
 
   try {
     await db.connect(currentUrl);
