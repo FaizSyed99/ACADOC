@@ -54,7 +54,7 @@ def expand_medical_query(query: str) -> list[str]:
             seen.add(exp_normalized)
             unique_expansions.append(exp)
     
-    print(f"🔍 Query expansion: '{query}' → {unique_expansions}")
+    print(f"Query expansion: '{query}' -> {unique_expansions}")
     return unique_expansions
 
 def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool, float, str]:
@@ -81,7 +81,7 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
     
     for phrase in definition_phrases:
         if phrase in context_text:
-            print(f"✅ Validation PASS: Found definition phrase '{phrase}'")
+            print(f"Validation PASS: Found definition phrase '{phrase}'")
             return True, 0.85, f"Found authoritative definition phrase"
     
     # ✅ SECONDARY CHECK: Flexible keyword overlap
@@ -91,7 +91,7 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
     important_words = query_words - stop_words
     
     if not important_words:
-        print(f"✅ Validation PASS: Generic query, allowing answer")
+        print(f"Validation PASS: Generic query, allowing answer")
         return True, 0.7, "Generic query accepted"
     
     matches = sum(1 for word in important_words if word in context_text)
@@ -99,10 +99,10 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
     
     if overlap_score >= 0.2:
         confidence = min(0.9, 0.6 + overlap_score)
-        print(f"✅ Validation PASS: Keyword overlap {overlap_score:.2f}")
+        print(f"Validation PASS: Keyword overlap {overlap_score:.2f}")
         return True, confidence, f"Keyword overlap sufficient ({overlap_score:.2f})"
     
-    print(f"❌ Validation FAIL: Overlap {overlap_score:.2f}, no definition phrases")
+    print(f"Validation FAIL: Overlap {overlap_score:.2f}, no definition phrases")
     return False, overlap_score, f"Low overlap ({overlap_score:.2f})"
 
 # ==============================================================================
