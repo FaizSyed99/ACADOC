@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, BookOpen, ShieldCheck, AlertCircle, ChevronDown, List, Brain, MessageSquareHeart, GraduationCap } from 'lucide-react';
 import Sidebar from '../components/layout/Sidebar';
 import FeedbackModal from '../components/ui/FeedbackModal';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Citation {
   source: string;
@@ -188,8 +190,14 @@ export default function Home() {
                       ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-3xl rounded-tr-sm shadow-blue-500/20' 
                       : 'bg-white border border-slate-200/80 text-slate-800 rounded-3xl rounded-tl-sm shadow-slate-200/50'
                   }`}>
-                    <div className="whitespace-pre-wrap leading-relaxed text-sm md:text-base prose prose-slate max-w-none">
-                      {m.content}
+                    <div className={`whitespace-pre-wrap leading-relaxed text-sm md:text-base ${m.role === 'assistant' ? 'prose prose-slate prose-sm md:prose-base max-w-none prose-headings:font-bold prose-a:text-blue-600 prose-p:leading-relaxed' : ''}`}>
+                      {m.role === 'assistant' ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {m.content}
+                        </ReactMarkdown>
+                      ) : (
+                        m.content
+                      )}
                     </div>
                   </div>
 
