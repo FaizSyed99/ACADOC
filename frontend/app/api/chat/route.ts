@@ -1,7 +1,20 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const rawUrl = process.env.BACKEND_API_URL || process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
+let rawUrl = process.env.BACKEND_API_URL || process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
+
+// Foolproof logic: automatically add https:// if missing
+if (!rawUrl.startsWith('http')) {
+    rawUrl = 'https://' + rawUrl;
+}
+
+// Foolproof logic: if user pastes the Hugging Face webpage URL instead of the direct API URL, fix it automatically
+if (rawUrl.includes('huggingface.co/spaces/')) {
+    const spacePath = rawUrl.split('huggingface.co/spaces/')[1].replace(/\/$/, '');
+    const [org, name] = spacePath.split('/');
+    rawUrl = `https://${org}-${name}.hf.space`;
+}
+
 const API_URL = rawUrl.replace(/\/$/, '');
 
 // Allow Vercel up to 60 seconds to wait for Render's cold start
