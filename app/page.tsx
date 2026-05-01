@@ -98,7 +98,6 @@ export default function Home() {
   const getPlaceholder = () => {
     if (subject === 'Community Medicine') return "Ask about Park's epidemiology triad...";
     if (subject === 'Forensic Medicine') return "Ask about rigor mortis timeline...";
-    if (subject === 'Ophthalmology') return "Ask about stages of diabetic retinopathy...";
     return `Ask a question about ${subject}...`;
   };
 

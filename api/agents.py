@@ -109,7 +109,7 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
 # MAIN PIPELINE
 # ==============================================================================
 
-async def run_pipeline(question: str, vector_store, llm, subject: str = "Community Medicine", intent: str = "Revise") -> dict:
+async def run_pipeline(question: str, vector_store, llm, subject: str = "Community Medicine", intent: str = "Revise", system_prompt: Optional[str] = None) -> dict:
     """
     Main async pipeline for AcaDoc AI.
     """
@@ -174,13 +174,36 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
         
         intent_instructions = ""
         if intent == "Revise":
-            intent_instructions = "Format the answer as a Long Answer Question (LAQ) structure: Definition -> Classification -> Pathophysiology -> Clinical -> Management."
+            intent_instructions = """
+            Format the answer as a Long Answer Question (LAQ) structure.
+            Structure: Definition -> Classification (ONLY if essential) -> Pathophysiology -> Clinical -> Management.
+            
+            RULES:
+            1. OMIT any section if the provided context lacks sufficient information. 
+            2. NEVER state that information is missing or that the context is silent. Simply skip the section.
+            3. Include 'Classification' only if it provides unique value to the topic.
+            4. TONE: Professional, clinical, and direct. Avoid conversational fillers.
+            """
         elif intent == "Test":
             intent_instructions = "Format the answer as a quick test. Provide the core fact and then ask a brief follow-up question to test the student."
         elif intent == "Notes":
-            intent_instructions = "Format the answer as high-yield, extremely concise bullet points for quick revision."
+            intent_instructions = """
+            Role: Expert Medical Professor creating concise, high-yield study notes.
+            Task: Answer using 'Hierarchical Flow' format.
+            
+            Formatting Rules:
+            1. Header Block: TOPIC TITLE (ALL CAPS, UNDERLINED).
+            2. Definition: 2-3 line definition immediately below the header.
+            3. Arrow Logic (→): Use for cause-and-effect sequences instead of sentences.
+            4. Section Intelligence: OMIT sections like 'Classification', 'MOA', or 'Complications' if the information is not present in the context or not necessary for the topic.
+            5. NO PLACEHOLDERS: Never mention that the context is missing details. If it's not there, it doesn't exist in your response.
+            6. Tone: Extremely concise. Eliminate all filler words.
+            """
 
-        prompt = f"""You are AcaDoc AI, a textbook-grounded medical tutor for a 3rd Year MBBS student.
+        # Use system_prompt if provided, otherwise default
+        base_persona = system_prompt if system_prompt else "You are AcaDoc AI, a textbook-grounded medical tutor for a 3rd Year MBBS student."
+        
+        prompt = f"""{base_persona}
 Address the user input using ONLY the provided context. If information is missing, state so explicitly.
 Keep your tone academic, slightly humorous, professional, and clinical.
 

@@ -10,8 +10,6 @@ interface SidebarProps {
 
 export const SUBJECTS = [
   "Community Medicine",
-  "ENT",
-  "Ophthalmology",
   "Forensic Medicine"
 ];
 
