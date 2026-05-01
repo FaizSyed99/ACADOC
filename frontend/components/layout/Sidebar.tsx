@@ -1,89 +1,86 @@
 import { Dispatch, SetStateAction } from 'react';
-import { Book, CheckCircle, PenTool, LayoutDashboard } from 'lucide-react';
+import { Book, CheckCircle, PenTool, LayoutDashboard, Settings, Library, Microscope, Eye, Headphones, FileSearch, Users, Ear, Search, LayoutGrid, Brain, PieChart } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 interface SidebarProps {
-  subject: string;
-  setSubject: Dispatch<SetStateAction<string>>;
+  subject?: string;
+  setSubject?: Dispatch<SetStateAction<string>>;
   intent: string;
   setIntent: Dispatch<SetStateAction<string>>;
 }
 
-export const SUBJECTS = [
-  "Community Medicine",
-  "ENT",
-  "Ophthalmology",
-  "Forensic Medicine"
-];
-
 export const INTENTS = [
-  { id: "Revise", label: "📖 Revise (LAQ)", icon: Book },
-  { id: "Test", label: "🧪 Quick Test", icon: CheckCircle },
-  { id: "Notes", label: "📝 Make Notes", icon: PenTool },
+  { id: "Revise", label: "Revise", icon: Book },
+  { id: "Test", label: "Test", icon: CheckCircle },
+  { id: "Notes", label: "Notes", icon: PenTool },
 ];
 
 export default function Sidebar({ subject, setSubject, intent, setIntent }: SidebarProps) {
+  const pathname = usePathname();
+  const isSubjectsPage = pathname === '/subjects';
+  const isHomePage = pathname === '/';
+
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 h-full flex flex-col p-4 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 shrink-0 hidden md:flex">
-      <div className="flex items-center gap-2 mb-8 px-2">
-        <LayoutDashboard className="w-5 h-5 text-blue-600" />
-        <h2 className="font-bold text-slate-800 tracking-tight">AcaDoc AI</h2>
+    <nav className="fixed left-0 top-0 h-screen w-24 flex flex-col items-center py-6 z-40 bg-slate-950/60 backdrop-blur-[30px] border-r border-white/10 shadow-[20px_0_40px_-15px_rgba(0,0,0,0.5)] hidden md:flex">
+      <div className="mb-8">
+        <Link href="/">
+          <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30 shadow-[0_0_20px_rgba(8,154,155,0.25)] transition-transform hover:scale-105 active:scale-95">
+            <span className="font-space-grotesk text-primary text-xl font-bold">A</span>
+          </div>
+        </Link>
       </div>
 
-      <div className="space-y-6 flex-1">
-        {/* Subject Selector */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-2">
-            Active Subject
-          </label>
-          <div className="relative">
-            <select
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium cursor-pointer transition-all"
+      <div className="flex flex-col gap-6 flex-1 w-full items-center">
+        {/* Explore Section */}
+        <div className="flex flex-col gap-2 w-full items-center">
+          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1 opacity-50">Explore</span>
+          
+          <Link href="/subjects" className="w-full px-2">
+            <button
+              className={`flex flex-col items-center justify-center w-full py-2.5 rounded-xl transition-all duration-300 group relative ${
+                isSubjectsPage 
+                  ? 'text-primary bg-primary/10 shadow-[inset_0_0_20px_rgba(8,154,155,0.15)] border border-primary/20 border-l-4 border-l-primary' 
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
             >
-              {SUBJECTS.map((sub) => (
-                <option key={sub} value={sub}>{sub}</option>
-              ))}
-            </select>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-            </div>
-          </div>
+              <Library className={`w-5 h-5 mb-1 transition-transform duration-300 group-hover:scale-110 ${isSubjectsPage ? 'drop-shadow-[0_0_8px_rgba(8,154,155,0.5)]' : ''}`} />
+              <span className="text-[9px] font-bold uppercase tracking-widest">Library</span>
+            </button>
+          </Link>
         </div>
 
-        {/* Intent Selector */}
-        <div className="space-y-3">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-2">
-            Study Mode
-          </label>
-          <div className="flex flex-col gap-2">
-            {INTENTS.map((mode) => {
-              const Icon = mode.icon;
-              const isActive = intent === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  onClick={() => setIntent(mode.id)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                      : 'bg-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent hover:border-slate-200'
-                    }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-100' : 'text-slate-400'}`} />
-                  {mode.label}
-                </button>
-              );
-            })}
-          </div>
+        {/* Modes Section */}
+        <div className="flex flex-col gap-2 w-full items-center">
+           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1 opacity-50">Modes</span>
+          {INTENTS.map((mode) => {
+            const Icon = mode.icon;
+            const isActive = intent === mode.id && isHomePage;
+            return (
+              <button
+                key={mode.id}
+                onClick={() => setIntent(mode.id)}
+                className={`flex flex-col items-center justify-center w-full py-2.5 px-2 rounded-xl transition-all duration-300 group relative ${
+                  isActive 
+                    ? 'text-primary bg-primary/10 shadow-[inset_0_0_20px_rgba(8,154,155,0.15)] border border-primary/20 border-l-4 border-l-primary' 
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                <Icon className={`w-5 h-5 mb-1 transition-transform duration-300 group-hover:scale-110 ${isActive ? 'drop-shadow-[0_0_8px_rgba(8,154,155,0.5)]' : ''}`} />
+                <span className="text-[9px] font-bold uppercase tracking-widest">{mode.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Bottom Section */}
+        <div className="mt-auto flex flex-col gap-2 py-4 w-full items-center border-t border-white/5">
+          <button className="flex flex-col items-center justify-center w-full py-2.5 px-2 rounded-xl text-slate-500 hover:text-slate-300 hover:bg-white/5 transition-all duration-300 group">
+            <Settings className="w-5 h-5 mb-1 group-hover:rotate-45 transition-transform duration-500" />
+            <span className="text-[9px] font-bold uppercase tracking-widest font-space-grotesk">Settings</span>
+          </button>
         </div>
       </div>
-
-      {/* Session Badge */}
-      <div className="mt-auto p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100/50 rounded-2xl">
-        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1">Current Session</p>
-        <p className="text-sm font-semibold text-blue-900 leading-tight">{subject}</p>
-        <p className="text-xs text-blue-600/80 mt-1">{INTENTS.find(i => i.id === intent)?.label}</p>
-      </div>
-    </aside>
+    </nav>
   );
 }
