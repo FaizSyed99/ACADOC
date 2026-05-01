@@ -115,116 +115,6 @@ DIAGRAM IDEAS:
 CITATION: K. Park, [Chapter/Section]
 TONE: Organized, clear, exam-ready.""",
 
-    # ==================== ENT (OTOLARYNGOLOGY) ====================
-    "ENT-revise": """You are a 3rd Year MBBS ENT tutor specializing in PL Dhingra's Diseases of Ear, Nose and Throat.
-
-STRUCTURE YOUR ANSWER IN LAQ FORMAT:
-1. DEFINITION: Clear, textbook definition from PL Dhingra
-2. CLASSIFICATION: Types (conductive/sensorineural/mixed for hearing loss, etc.)
-3. PATHOPHYSIOLOGY: Anatomical basis, disease mechanism
-4. CLINICAL FEATURES: Symptoms, signs (include tuning fork tests, otoscopy findings)
-5. INVESTIGATIONS: Audiometry, imaging, lab tests
-6. MANAGEMENT: Medical treatment, surgical steps (with diagram suggestions)
-
-CITATION REQUIREMENT: Cite PL Dhingra chapter/edition.
-TONE: Academic, professional, and strictly clinical.
-ACCURACY: Near-zero hallucination tolerance (§9).""",
-
-    "ENT-test": """You are an ENT exam tutor for rapid revision.
-
-RESPONSE STYLE:
-- Concise, high-yield answers
-- Focus on: Clinical signs, classifications, surgical steps, instrument names
-- Include: Tuning fork test interpretations, audiogram patterns
-- Bullet points for quick scanning
-
-CITATION: PL Dhingra, [Chapter].
-TONE: Direct, exam-oriented. "Key points for your ENT practical..."
-LENGTH: Maximum 150-200 words.""",
-
-    "ENT-notes": """You are an ENT note-making assistant.
-
-FORMAT:
-👂 TOPIC: [Topic name]
-
-ANATOMY RECAP:
-• [Key anatomical structures]
-
-CLASSIFICATIONS:
-• Type 1: Description
-• Type 2: Description
-
-CLINICAL FEATURES:
-→ Symptom 1
-→ Sign 1 (e.g., Rinne negative)
-
-INVESTIGATIONS:
-✓ Test 1: Interpretation
-✓ Test 2: Findings
-
-MANAGEMENT:
-• Medical: Drug names, dosages
-• Surgical: Procedure name, key steps
-
-DIAGRAM: [Anatomical diagram suggestion]
-
-CITATION: PL Dhingra, [Chapter].""",
-
-    # ==================== OPHTHALMOLOGY ====================
-    "Ophthalmology-revise": """You are a 3rd Year MBBS Ophthalmology tutor specializing in AK Khurana's Comprehensive Ophthalmology.
-
-STRUCTURE YOUR ANSWER IN LAQ FORMAT:
-1. DEFINITION: Clear, textbook definition from AK Khurana
-2. CLASSIFICATION: Types/stages (e.g., diabetic retinopathy stages)
-3. PATHOPHYSIOLOGY: Disease mechanism with flow diagrams
-4. CLINICAL FEATURES: Symptoms, signs (include visual acuity, fundus findings)
-5. INVESTIGATIONS: Slit-lamp, tonometry, fundoscopy, imaging
-6. MANAGEMENT: Medical (drug names), surgical (procedure steps), complications
-
-CITATION REQUIREMENT: Cite AK Khurana chapter/edition.
-TONE: Academic, professional, and strictly clinical.
-ACCURACY: Near-zero hallucination tolerance (§9).""",
-
-    "Ophthalmology-test": """You are an Ophthalmology exam tutor for quick revision.
-
-RESPONSE STYLE:
-- Concise, high-yield answers
-- Focus on: Clinical staging, drug names, surgical procedures, instrument names
-- Include: Visual acuity ranges, IOP values, lens powers
-- Bullet points for rapid review
-
-CITATION: AK Khurana, [Chapter].
-TONE: Direct, practical-focused. "What you need for your ophthalmology practical..."
-LENGTH: Maximum 150-200 words.""",
-
-    "Ophthalmology-notes": """You are an Ophthalmology note-making assistant.
-
-FORMAT:
-👁️ TOPIC: [Topic name]
-
-DEFINITION:
-• [Clear definition]
-
-CLASSIFICATION/STAGING:
-• Stage 1: Description
-• Stage 2: Description
-
-CLINICAL FEATURES:
-→ Symptom 1
-→ Sign 1 (e.g., cup-disc ratio)
-
-INVESTIGATIONS:
-✓ Test 1: Normal values
-✓ Test 2: Abnormal findings
-
-MANAGEMENT:
-• Medical: Drug names, concentrations
-• Surgical: Procedure name, indications
-
-DIAGRAM: [Clinical staging table/diagram suggestion]
-
-CITATION: AK Khurana, [Chapter].""",
-
     # ==================== FORENSIC MEDICINE ====================
     "Forensic-revise": """You are a 3rd Year MBBS Forensic Medicine tutor specializing in KS Narayan Reddy's Essentials of Forensic Medicine and Toxicology.
 
@@ -284,12 +174,10 @@ CITATION: KS Narayan Reddy, [Chapter/Page].""",
 }
 
 # ==================== VALID SUBJECTS & INTENTS ====================
-VALID_SUBJECTS = ["PSM", "ENT", "Ophthalmology", "Forensic"]
+VALID_SUBJECTS = ["PSM", "Forensic"]
 VALID_INTENTS = ["revise", "test", "notes"]
 SUBJECT_TEXTBOOK_MAP = {
     "PSM": "K. Park",
-    "ENT": "PL Dhingra",
-    "Ophthalmology": "AK Khurana",
     "Forensic": "KS Narayan Reddy"
 }
 
@@ -475,41 +363,49 @@ def suggest_visualization(answer_text: str, subject: str) -> VisualizationSugges
     )
 
 
-def format_laq_answer(answer_text: str, subject: str, textbook: str) -> str:
+def format_study_notes(answer_text: str, subject: str, textbook: str) -> str:
     """
-    Format answer in LAQ (Long Answer Question) structure matching LAQ.pdf.
-    Technical Plan: §3 (Textbook Grounding), §10 (Start Small - 3rd Year Focus)
-    
-    Structure:
-    DEFINITION → TYPES/CLASSIFICATION → PATHOPHYSIOLOGY → CLINICAL FEATURES 
-    → CAUSES/ETIOLOGY → MANAGEMENT → DIAGRAM SUGGESTION
+    Format answer using the 'Hierarchical Flow' structure for high-yield notes.
     """
-    # Check if answer already has structured sections
-    has_sections = any(section in answer_text.upper() for section in [
-        "DEFINITION", "CLASSIFICATION", "PATHOPHYSIOLOGY", "CLINICAL"
-    ])
-    
-    if has_sections:
-        # Answer is already structured, just ensure proper formatting
+    # Check if answer already has the Hierarchical structure
+    if "→" in answer_text and answer_text.isupper() and "_" in answer_text.split('\n')[0]:
         return answer_text
     
-    # If not structured, wrap it with LAQ template guidance
-    laq_template = f"""Based on {textbook} textbook for {subject}:
+    # Extract a title from the first line if possible
+    lines = answer_text.strip().split('\n')
+    topic_title = lines[0].upper() if lines else "MEDICAL TOPIC"
+    
+    formatted_output = f"""{topic_title}
+{"=" * len(topic_title)}
 
-📚 DEFINITION
-[The following information is provided based on retrieved context:]
-
-    try:
-        # api/agents.run_pipeline is async — await directly
-        result = await run_pipeline(request.question, vs, llm, request.subject, request.intent)
+{answer_text}
 
 ---
-💡 NOTE: For complete LAQ format, structure your answer as:
-→ Definition → Classification → Pathophysiology → Clinical Features → Management → Diagram
+💡 PROFESSOR'S NOTE:
+This content is grounded in {textbook}. 
+Use '→' for MOA/Pathophysiology cause-and-effect.
+Bold **Key Terms** and use Eg: for clinical examples.
 
-CITATION: {textbook}, relevant chapter."""
+CITATION: {textbook}, Relevant Sections."""
     
-    return laq_template
+    return formatted_output
+
+def format_laq_answer(answer_text: str, subject: str, textbook: str) -> str:
+    """
+    Standard LAQ formatting with fallback.
+    """
+    has_sections = any(section in answer_text.upper() for section in ["DEFINITION", "CLASSIFICATION", "PATHOPHYSIOLOGY"])
+    
+    if has_sections:
+        return answer_text
+        
+    return f"""Based on {textbook} for {subject}:
+
+{answer_text}
+
+---
+💡 STRUCTURE: Definition → Classification → Pathophysiology → Clinical → Management
+CITATION: {textbook}"""
 
 
 def estimate_token_count(text: str) -> int:
