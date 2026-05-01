@@ -22,7 +22,6 @@ chroma_db/
 faiss_index/
 *.db
 *.bin
-*.json
 
 # Environment Variables
 .env
