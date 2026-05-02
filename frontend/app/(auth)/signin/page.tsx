@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { Brain, Lock, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -89,6 +90,15 @@ export default function SignInPage() {
             {loading ? "Verifying..." : "Access Console"}
           </button>
         </form>
+
+        <div className="mt-8 text-center border-t border-slate-100 pt-6">
+          <p className="text-sm text-slate-500 font-medium">
+            New to AcaDoc AI?{" "}
+            <Link href="/signup" className="text-blue-600 font-bold hover:text-blue-700 hover:underline underline-offset-4 transition-all">
+              Create an account
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )
