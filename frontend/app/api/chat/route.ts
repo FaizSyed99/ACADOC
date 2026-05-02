@@ -2,22 +2,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 let rawUrl = process.env.BACKEND_API_URL || process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
+console.log("🛠️ Initial Backend URL from Env:", rawUrl);
 
 // Foolproof logic: automatically add https:// if missing
-if (!rawUrl.startsWith('http')) {
+if (!rawUrl.startsWith('http') && !rawUrl.includes('localhost') && !rawUrl.includes('127.0.0.1')) {
     rawUrl = 'https://' + rawUrl;
 }
 
-// Foolproof logic: if user pastes the Hugging Face webpage URL instead of the direct API URL, fix it automatically
-if (rawUrl.includes('huggingface.co/spaces/')) {
-    const spacePath = rawUrl.split('huggingface.co/spaces/')[1].replace(/\/$/, '');
-    const [org, name] = spacePath.split('/');
-    // HF subdomains MUST be lowercase
-    rawUrl = `https://${org.toLowerCase()}-${name.toLowerCase()}.hf.space`;
+// Aggressive HF Fix: Handle any Hugging Face URL format
+if (rawUrl.includes('huggingface.co')) {
+    const parts = rawUrl.replace('https://', '').replace('http://', '').split('/');
+    // Format is usually huggingface.co/spaces/org/name or huggingface.co/org/name
+    const spaceIndex = parts.indexOf('spaces');
+    let org, name;
+    
+    if (spaceIndex !== -1 && parts.length > spaceIndex + 2) {
+        org = parts[spaceIndex + 1];
+        name = parts[spaceIndex + 2];
+    } else if (parts.length >= 2) {
+        // If "spaces" is missing, assume huggingface.co/org/name
+        org = parts[1];
+        name = parts[2];
+    }
+
+    if (org && name) {
+        rawUrl = `https://${org.toLowerCase()}-${name.toLowerCase()}.hf.space`;
+        console.log("✅ Converted to Direct HF API:", rawUrl);
+    }
 }
 
 const API_URL = rawUrl.replace(/\/$/, '');
-console.log("📡 Calling Backend API:", `${API_URL}/api/chat`);
+console.log("📡 Final Target API URL:", `${API_URL}/api/chat`);
 
 // Allow Vercel up to 60 seconds to wait for Render's cold start
 export const maxDuration = 60;
