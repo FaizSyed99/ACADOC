@@ -576,11 +576,8 @@ async def chat(request: ChatRequest):
                 detail="Vector store not initialized. Check ingestion pipeline.",
             )
         
-        # === TASK 3: Subject-filtered retrieval ===
-        # Note: Current vector_store_faiss.py doesn't support filtering yet
-        # This is a placeholder for future implementation
         # chunks = vs.retrieve(context_query, n_results=6, filter={"subject": subject})
-        chunks = await run_pipeline(context_query, vs, llm)
+        chunks = await run_pipeline(context_query, vs, llm, subject=subject, intent=intent, system_prompt=system_prompt)
         
         # === VALIDATION LAYER (§4, §9) ===
         is_sufficient = chunks.get("validated_context") == "SUFFICIENT"

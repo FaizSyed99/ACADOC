@@ -31,11 +31,22 @@ def expand_medical_query(query: str) -> list[str]:
                 "Scope of Forensic Medicine",
                 "Forensic sciences include"
             ])
+        elif "community" in q_lower or "psm" in q_lower or "social" in q_lower or "preventive" in q_lower:
+            expansions.extend([
+                "Community medicine is defined",
+                "Preventive and social medicine is",
+                "Definition of community medicine",
+                "Introduction to community medicine",
+                "Concept of health and disease"
+            ])
     
     # ✅ Handle author-specific queries
     if any(name in q_lower for name in ["red", "narayan", "reddy", "ksn", "k.s.n"]):
         expansions.append("KS Narayan Reddy Forensic Medicine")
         expansions.append("Reddy textbook Forensic Medicine definition")
+    elif any(name in q_lower for name in ["park", "k park"]):
+        expansions.append("K. Park Preventive and Social Medicine")
+        expansions.append("Park textbook Community Medicine definition")
     
     # ✅ Handle "concept" queries specifically
     if "concept" in q_lower and "forensic" in q_lower:
@@ -43,6 +54,13 @@ def expand_medical_query(query: str) -> list[str]:
             "Forensic medicine concept",
             "Principles of Forensic Medicine",
             "Foundation of Forensic Medicine"
+        ])
+    elif "concept" in q_lower and ("community" in q_lower or "health" in q_lower):
+        expansions.extend([
+            "Concept of health",
+            "Concept of disease",
+            "Principles of Community Medicine",
+            "Epidemiological triad"
         ])
     
     # Remove duplicates while preserving order
@@ -76,7 +94,10 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
         "defined as",
         "introduction to forensic",
         "forensic sciences include",
-        "branch of medicine"
+        "branch of medicine",
+        "community medicine is",
+        "preventive and social medicine",
+        "concept of health"
     ]
     
     for phrase in definition_phrases:
@@ -172,8 +193,9 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
             for c in retrieved
         ])
         
+        intent_normalized = intent.lower() if intent else "revise"
         intent_instructions = ""
-        if intent == "Revise":
+        if intent_normalized == "revise":
             intent_instructions = """
             Format the answer as a Long Answer Question (LAQ) structure.
             Structure: Definition -> Classification (ONLY if essential) -> Pathophysiology -> Clinical -> Management.
@@ -184,9 +206,9 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
             3. Include 'Classification' only if it provides unique value to the topic.
             4. TONE: Professional, clinical, and direct. Avoid conversational fillers.
             """
-        elif intent == "Test":
+        elif intent_normalized == "test":
             intent_instructions = "Format the answer as a quick test. Provide the core fact and then ask a brief follow-up question to test the student."
-        elif intent == "Notes":
+        elif intent_normalized == "notes":
             intent_instructions = """
             Role: Expert Medical Professor creating concise, high-yield study notes.
             Task: Answer using 'Hierarchical Flow' format.
