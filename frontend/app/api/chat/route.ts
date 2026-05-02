@@ -12,10 +12,12 @@ if (!rawUrl.startsWith('http')) {
 if (rawUrl.includes('huggingface.co/spaces/')) {
     const spacePath = rawUrl.split('huggingface.co/spaces/')[1].replace(/\/$/, '');
     const [org, name] = spacePath.split('/');
-    rawUrl = `https://${org}-${name}.hf.space`;
+    // HF subdomains MUST be lowercase
+    rawUrl = `https://${org.toLowerCase()}-${name.toLowerCase()}.hf.space`;
 }
 
 const API_URL = rawUrl.replace(/\/$/, '');
+console.log("📡 Calling Backend API:", `${API_URL}/api/chat`);
 
 // Allow Vercel up to 60 seconds to wait for Render's cold start
 export const maxDuration = 60;
