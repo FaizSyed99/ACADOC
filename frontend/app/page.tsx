@@ -191,8 +191,10 @@ function HomeContent() {
                     </div>
                   ) : (
                     <div className="glass-card rounded-2xl rounded-tl-sm p-5 space-y-3">
-                      <div className="whitespace-pre-wrap leading-relaxed text-sm md:text-base prose prose-invert max-w-none text-slate-200">
-                        {m.content}
+                      <div className="leading-relaxed text-sm md:text-base prose prose-invert max-w-none text-slate-200 prose-headings:font-bold prose-a:text-blue-400 prose-p:leading-relaxed prose-strong:text-white">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {m.content}
+                        </ReactMarkdown>
                       </div>
 
                       {/* Validation & Citations */}
