@@ -11,16 +11,17 @@ import bcrypt from "bcryptjs"
  * Using local Credentials for rapid POC development without external SSO setup.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+  trustHost: true,
   cookies: {
     sessionToken: {
-      name: `__Secure-next-auth.session-token`,
+      name: process.env.NODE_ENV === 'production' ? `__Secure-next-auth.session-token` : `next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        domain: '.acadocai.com', // Shares cookie with all subdomains
-        secure: true
+        domain: '.acadocai.com', 
+        secure: process.env.NODE_ENV === 'production'
       }
     }
   },
