@@ -42,6 +42,13 @@ export async function POST(request: NextRequest) {
     try {
         const session = await auth();
         
+        // Debug session for cross-subdomain troubleshooting
+        if (!session) {
+            console.warn("🔐 [AUTH DEBUG] Session is NULL. Check cookies and NEXTAUTH_SECRET.");
+            const cookies = request.cookies.getAll().map(c => c.name);
+            console.log("🍪 [AUTH DEBUG] Available Cookies:", cookies);
+        }
+
         if (!session || !session.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
