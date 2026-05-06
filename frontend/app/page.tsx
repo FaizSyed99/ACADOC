@@ -31,10 +31,15 @@ function HomeContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // New States for Sidebar
+  // New States for Sidebar & Token Management
   const [subject, setSubject] = useState(searchParams.get('subject') || 'Community Medicine');
   const [intent, setIntent] = useState('Revise');
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  
+  // Token Management States (§11)
+  const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
+  const [totalQuota, setTotalQuota] = useState<number | null>(null);
+  const [quotaAlert, setQuotaAlert] = useState<'none' | 'warning' | 'hard-stop'>('none');
 
   useEffect(() => {
     const s = searchParams.get('subject');
@@ -76,6 +81,21 @@ function HomeContent() {
       }
 
       const data = await response.json();
+
+      // Update Token Management State (§11)
+      if (data.tokens_remaining !== undefined) {
+        setTokensRemaining(data.tokens_remaining);
+        setTotalQuota(data.total_quota);
+        
+        // 🚨 Hard Stop Logic
+        if (data.is_allowed === false) {
+          setQuotaAlert('hard-stop');
+        } 
+        // 🩺 Smart Threshold Logic ( < 15% remaining)
+        else if (data.tokens_remaining < (data.total_quota * 0.15)) {
+          setQuotaAlert('warning');
+        }
+      }
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -271,6 +291,48 @@ function HomeContent() {
             AcaDoc AI • Curriculum Grounded • Zero Hallucination
           </p>
         </div>
+
+        {/* Token Management Alerts (§11) */}
+        {quotaAlert !== 'none' && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className={`max-w-md w-full glass-card p-8 border-2 ${quotaAlert === 'hard-stop' ? 'border-red-500/50' : 'border-amber-500/50'} space-y-6 text-center shadow-2xl`}>
+              <div className="flex justify-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${quotaAlert === 'hard-stop' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                  {quotaAlert === 'hard-stop' ? <AlertCircle className="w-8 h-8" /> : <ShieldCheck className="w-8 h-8" />}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className={`text-xl font-bold ${quotaAlert === 'hard-stop' ? 'text-red-400' : 'text-amber-400'}`}>
+                  {quotaAlert === 'hard-stop' ? '⛔ Access Paused' : '🩺 Academic Resource Alert'}
+                </h3>
+                <p className="text-slate-300 text-sm leading-relaxed">
+                  {quotaAlert === 'hard-stop' 
+                    ? "Your daily curriculum allotment is reached. Access to the Medical Intelligence Suite will reset at midnight."
+                    : "Your current session is nearing its capacity. You have enough for approximately 2 more clinical queries."}
+                </p>
+              </div>
+
+              {quotaAlert === 'warning' && (
+                <button 
+                  onClick={() => setQuotaAlert('none')}
+                  className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-amber-500/30"
+                >
+                  Acknowledge & Continue
+                </button>
+              )}
+
+              {quotaAlert === 'hard-stop' && (
+                <button 
+                  onClick={() => window.location.href = 'https://acadocai.com'}
+                  className="w-full py-3 bg-red-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
+                >
+                  Return to Dashboard
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
