@@ -1,5 +1,6 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from "../../../src/lib/auth";
 
 let rawUrl = process.env.BACKEND_API_URL || process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
 console.log("🛠️ Initial Backend URL from Env:", rawUrl);
@@ -39,12 +40,20 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
     try {
+        const session = await auth();
+        
+        if (!session || !session.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
 
         const response = await fetch(`${API_URL}/api/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-User-Email': session.user.email || 'unknown',
+                'X-User-Name': session.user.name || 'unknown'
             },
             body: JSON.stringify(body),
         });

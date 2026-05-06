@@ -11,6 +11,19 @@ import bcrypt from "bcryptjs"
  * Using local Credentials for rapid POC development without external SSO setup.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.NEXTAUTH_SECRET,
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        domain: '.acadocai.com', // Shares cookie with all subdomains
+        secure: true
+      }
+    }
+  },
   adapter: SurrealDBAdapter(initDb() as any),
   providers: [
     Credentials({
