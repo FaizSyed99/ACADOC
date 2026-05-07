@@ -23,12 +23,22 @@ export async function recordActivity(
 /**
  * Retrieve activity history for a specific user.
  */
-export async function getUserActivity(email: string, limit: number = 50) {
+export async function getUserActivity(
+  email: string, 
+  { limit = 50, startDate }: { limit?: number; startDate?: Date } = {}
+) {
   try {
-    const res = await query(
-      'SELECT * FROM usage_logs WHERE email = $1 ORDER BY timestamp DESC LIMIT $2',
-      [email, limit]
-    );
+    let queryStr = 'SELECT * FROM usage_logs WHERE email = $1';
+    const params: any[] = [email, limit];
+
+    if (startDate) {
+      params.push(startDate);
+      queryStr += ` AND timestamp >= $3`;
+    }
+
+    queryStr += ' ORDER BY timestamp DESC LIMIT $2';
+
+    const res = await query(queryStr, params);
     return res.rows;
   } catch (error) {
     console.error('DAL Get User Activity Error:', error);
