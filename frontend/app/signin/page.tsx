@@ -1,47 +1,50 @@
 'use client';
 
 import { signIn } from "next-auth/react";
-import { GraduationCap, ShieldCheck, Brain, BookOpen } from "lucide-react";
+import { GraduationCap, ShieldCheck, Brain } from "lucide-react";
 
 export default function SignInPage() {
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+      {/* Dynamic Background Blobs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#089a9b]/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="max-w-md w-full space-y-8 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-2">
-            <GraduationCap className="w-8 h-8 text-primary" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#089a9b]/10 border border-[#089a9b]/20 mb-2 shadow-[0_0_20px_-5px_rgba(8,154,155,0.3)]">
+            <GraduationCap className="w-8 h-8 text-[#089a9b]" />
           </div>
           <h1 className="text-4xl font-bold tracking-tighter text-white font-manrope">
-            AcaDoc <span className="text-primary italic">AI</span>
+            AcaDoc <span className="text-[#089a9b] italic">AI</span>
           </h1>
           <p className="text-slate-400 text-sm max-w-[280px] mx-auto leading-relaxed">
-            The intelligent clinical companion for 3rd Year MBBS Students.
+            Authorized Intelligence Gateway for 3rd Year MBBS Students.
           </p>
         </div>
 
-        <div className="glass-card rounded-3xl p-8 border border-white/10 space-y-8 shadow-2xl">
-          <div className="space-y-6">
+        <div className="glass-card rounded-3xl p-8 border border-white/10 space-y-8 shadow-2xl relative overflow-hidden group">
+          {/* Subtle hover glow */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-[#089a9b]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          
+          <div className="space-y-6 relative z-10">
             <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5">
+              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 transition-colors hover:bg-white/[0.07]">
                 <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
                   <ShieldCheck className="w-5 h-5 text-emerald-500" />
                 </div>
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-white">Verified</h3>
-                  <p className="text-[10px] text-slate-400">Zero-hallucination medical data.</p>
+                  <p className="text-[10px] text-slate-400">Grounded in medical textbooks.</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
-                  <Brain className="w-5 h-5 text-primary" />
+              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 transition-colors hover:bg-white/[0.07]">
+                <div className="w-10 h-10 rounded-full bg-[#089a9b]/10 flex items-center justify-center border border-[#089a9b]/20">
+                  <Brain className="w-5 h-5 text-[#089a9b]" />
                 </div>
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-white">Adaptive</h3>
-                  <p className="text-[10px] text-slate-400">Smart mnemonics & active recall.</p>
+                  <p className="text-[10px] text-slate-400">Smart mnemonics & recall.</p>
                 </div>
               </div>
             </div>
@@ -73,7 +76,7 @@ export default function SignInPage() {
           </div>
         </div>
 
-        <p className="text-center text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold">
+        <p className="text-center text-[10px] text-slate-500 uppercase tracking-[0.3em] font-bold">
           Authorized Medical Access Only
         </p>
       </div>
