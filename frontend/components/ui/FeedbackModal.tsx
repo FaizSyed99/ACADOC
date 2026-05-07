@@ -1,28 +1,48 @@
 import { useState } from 'react';
-import { X, MessageSquareHeart } from 'lucide-react';
+import { X, MessageSquareHeart, Star } from 'lucide-react';
 
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
+  answerId?: string;
 }
 
-export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
+export default function FeedbackModal({ isOpen, onClose, answerId }: FeedbackModalProps) {
   const [feedback, setFeedback] = useState('');
+  const [rating, setRating] = useState<number>(0);
+  const [hoveredRating, setHoveredRating] = useState<number>(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate API call
-    setTimeout(() => {
+    setIsSubmitting(true);
+    
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answerId: answerId || "general-chat",
+          rating,
+          comment: feedback
+        })
+      });
+      
       setSubmitted(true);
       setTimeout(() => {
         setSubmitted(false);
         setFeedback('');
+        setRating(0);
         onClose();
       }, 2000);
-    }, 500);
+    } catch (error) {
+      console.error("Failed to submit feedback", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -34,7 +54,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             <div className="p-2 bg-primary/20 text-primary rounded-lg border border-primary/30">
               <MessageSquareHeart className="w-5 h-5" />
             </div>
-            <h3 className="text-xl font-bold font-space-grotesk text-slate-100">Feature Request</h3>
+            <h3 className="text-xl font-bold font-space-grotesk text-slate-100">Rate Response</h3>
           </div>
           <button 
             onClick={onClose}
@@ -52,28 +72,53 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
               </div>
               <p className="text-xl font-bold text-slate-100">Feedback Received!</p>
-              <p className="text-sm text-slate-400 font-medium">We'll review your request to improve AcaDoc.</p>
+              <p className="text-sm text-slate-400 font-medium">Your rating helps us improve AcaDoc.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              
+              <div className="space-y-2 text-center">
+                <label className="block font-label-caps mb-2 text-slate-300">How accurate was this response?</label>
+                <div className="flex justify-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
+                      onMouseEnter={() => setHoveredRating(star)}
+                      onMouseLeave={() => setHoveredRating(0)}
+                      className="p-1 transition-all hover:scale-110"
+                    >
+                      <Star 
+                        className={`w-8 h-8 ${
+                          (hoveredRating || rating) >= star 
+                            ? "fill-amber-400 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" 
+                            : "text-slate-600"
+                        } transition-all duration-200`} 
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-3">
-                <label className="block font-label-caps">
-                  What feature do you need next?
+                <label className="block font-label-caps text-slate-300">
+                  Additional comments (Optional)
                 </label>
                 <textarea
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="e.g., Support for Pathology, better diagram generation..."
-                  className="w-full h-32 p-4 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 resize-none text-slate-200 placeholder:text-slate-500 text-sm transition-all"
-                  required
+                  placeholder="Tell us what was good or what was missing..."
+                  className="w-full h-24 p-4 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 resize-none text-slate-200 placeholder:text-slate-500 text-sm transition-all"
                 />
               </div>
+              
               <button
                 type="submit"
-                disabled={!feedback.trim()}
+                disabled={rating === 0 || isSubmitting}
                 className="w-full py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 disabled:shadow-none transition-all uppercase tracking-widest text-xs"
               >
-                Submit Request
+                {isSubmitting ? "Submitting..." : "Submit Rating"}
               </button>
             </form>
           )}

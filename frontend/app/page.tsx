@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Send, BookOpen, ShieldCheck, AlertCircle, ChevronDown, List, Brain, MessageSquareHeart, GraduationCap } from 'lucide-react';
 import Sidebar from '../components/layout/Sidebar';
 import FeedbackModal from '../components/ui/FeedbackModal';
@@ -36,16 +36,24 @@ function HomeContent() {
   const [subject, setSubject] = useState(searchParams.get('subject') || 'Community Medicine');
   const [intent, setIntent] = useState('Revise');
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [feedbackAnswerId, setFeedbackAnswerId] = useState<string | undefined>(undefined);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(searchParams.get('session'));
   
   // Token Management States (§11)
   const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
   const [totalQuota, setTotalQuota] = useState<number | null>(null);
   const [quotaAlert, setQuotaAlert] = useState<'none' | 'warning' | 'hard-stop'>('none');
 
+  const router = useRouter();
+
   useEffect(() => {
     const s = searchParams.get('subject');
-    if (s) setSubject(s);
-  }, [searchParams]);
+    if (s) {
+      setSubject(s);
+    } else {
+      router.push('/subjects');
+    }
+  }, [searchParams, router]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -61,8 +69,29 @@ function HomeContent() {
 
     const userMessage: Message = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
+
+    let sessionId = currentSessionId;
+    if (!sessionId && messages.length === 0) {
+      try {
+        const sessionRes = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, intent, summary: currentInput.substring(0, 50) + "..." })
+        });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          sessionId = sessionData.session?.id;
+          setCurrentSessionId(sessionId);
+          // Optional: Update URL without full reload
+          window.history.pushState(null, '', `/?subject=${encodeURIComponent(subject)}&session=${sessionId}`);
+        }
+      } catch (e) {
+        console.error("Failed to create session", e);
+      }
+    }
 
     try {
       const response = await fetch('/api/chat', {
@@ -233,7 +262,7 @@ function HomeContent() {
                         )}
 
                         {m.citations && m.citations.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap gap-1.5 mb-3">
                             {m.citations.map((c, ci) => (
                               <div key={ci} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 text-slate-400 rounded-md text-[9px] font-bold border border-white/5">
                                 <List className="w-2.5 h-2.5" />
@@ -242,6 +271,20 @@ function HomeContent() {
                             ))}
                           </div>
                         )}
+                        
+                        {/* Rate Response Button */}
+                        <div className="flex justify-end border-t border-white/5 pt-2 mt-2">
+                          <button 
+                            onClick={() => {
+                              setFeedbackAnswerId(`msg-${i}`);
+                              setIsFeedbackOpen(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors group"
+                          >
+                            <MessageSquareHeart className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                            Rate Response
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -338,7 +381,11 @@ function HomeContent() {
         )}
       </main>
 
-      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      <FeedbackModal 
+        isOpen={isFeedbackOpen} 
+        onClose={() => setIsFeedbackOpen(false)} 
+        answerId={feedbackAnswerId}
+      />
     </div>
   );
 }
