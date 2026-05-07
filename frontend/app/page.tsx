@@ -48,10 +48,31 @@ function HomeContent() {
 
   useEffect(() => {
     const s = searchParams.get('subject');
+    const sess = searchParams.get('session');
+    
     if (s) {
       setSubject(s);
     } else {
       router.push('/subjects');
+    }
+    
+    if (sess && sess !== currentSessionId) {
+      setCurrentSessionId(sess);
+      // Fetch messages for this session
+      setIsLoading(true);
+      fetch(`/api/sessions/${sess}`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setMessages(data);
+          }
+        })
+        .catch(console.error)
+        .finally(() => setIsLoading(false));
+    } else if (!sess && currentSessionId) {
+      // New chat
+      setCurrentSessionId(null);
+      setMessages([]);
     }
   }, [searchParams, router]);
 
@@ -137,6 +158,21 @@ function HomeContent() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Save messages asynchronously
+      if (sessionId) {
+        fetch(`/api/sessions/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: userMessage })
+        }).catch(console.error);
+
+        fetch(`/api/sessions/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: assistantMessage })
+        }).catch(console.error);
+      }
     } catch (error) {
       console.error(error);
       setMessages((prev) => [

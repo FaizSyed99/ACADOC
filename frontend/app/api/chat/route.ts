@@ -54,6 +54,18 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
+        
+        // --- ⚡ SMART GLOBAL CACHE CHECK ---
+        const { query, subject, intent } = body;
+        if (query && subject && intent) {
+            const { checkGlobalCache, updateGlobalCache } = await import("../../../src/lib/dal/cache");
+            const cachedResponse = await checkGlobalCache(subject, intent, query);
+            
+            if (cachedResponse) {
+                console.log(`⚡ [CACHE HIT] Returning instantly for query: "${query.substring(0, 30)}..."`);
+                return NextResponse.json(cachedResponse);
+            }
+        }
 
         const response = await fetch(`${API_URL}/api/chat`, {
             method: 'POST',
@@ -72,6 +84,13 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await response.json();
+        
+        // --- ⚡ UPDATE SMART CACHE ---
+        if (query && subject && intent) {
+            const { updateGlobalCache } = await import("../../../src/lib/dal/cache");
+            await updateGlobalCache(subject, intent, query, data);
+        }
+
         return NextResponse.json(data);
 
     } catch (error: any) {
