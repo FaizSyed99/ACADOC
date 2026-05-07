@@ -7,16 +7,16 @@ import { Users, Ear, Eye, Search, ArrowRight } from 'lucide-react';
 
 const SUBJECTS = [
   {
-    id: "Community Medicine",
-    name: "Community Medicine",
+    id: "Forensic Medicine and Toxicology",
+    name: "Forensic Medicine and Toxicology",
     description: "Study of population health, disease prevention, and community healthcare systems.",
     icon: Users,
     image: "/images/subjects/community_medicine.png",
     color: "from-blue-500/20 to-cyan-500/20"
   },
   {
-    id: "Forensic Medicine",
-    name: "Forensic Medicine",
+    id: "Social and Preventive Medicine",
+    name: "Social and Preventive Medicine",
     description: "Application of medical knowledge to legal investigations and criminal justice.",
     icon: Search,
     image: "/images/subjects/forensic_medicine.png",
