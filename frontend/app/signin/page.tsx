@@ -34,7 +34,6 @@ export default function SignInPage() {
                   <ShieldCheck className="w-5 h-5 text-emerald-500" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Verified</h3>
                   <p className="text-[10px] text-slate-400">Grounded in medical textbooks.</p>
                 </div>
               </div>
