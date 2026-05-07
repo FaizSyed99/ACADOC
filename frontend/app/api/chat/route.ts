@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.INTERNAL_BACKEND_SECRET}`,
                 'X-User-Email': session.user.email || 'unknown',
                 'X-User-Name': session.user.name || 'unknown'
             },

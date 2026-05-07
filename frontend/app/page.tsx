@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Send, BookOpen, ShieldCheck, AlertCircle, ChevronDown, List, Brain, MessageSquareHeart, GraduationCap } from 'lucide-react';
 import Sidebar from '../components/layout/Sidebar';
 import FeedbackModal from '../components/ui/FeedbackModal';
+import UserNav from '../components/ui/UserNav';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -162,6 +163,8 @@ function HomeContent() {
             >
               <MessageSquareHeart className="w-5 h-5" />
             </button>
+            <div className="h-6 w-[1px] bg-white/10" />
+            <UserNav />
           </div>
         </header>
 

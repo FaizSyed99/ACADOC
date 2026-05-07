@@ -1,8 +1,6 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { SurrealDBAdapter } from "@auth/surrealdb-adapter"
-import { db, initDb } from "./db"
-import { findByEmail } from "./dal/users"
+import Google from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
 
 /**
@@ -15,18 +13,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   cookies: {
     sessionToken: {
-      name: process.env.NODE_ENV === 'production' ? `__Secure-next-auth.session-token` : `next-auth.session-token`,
+      // Use the generic name if __Secure- is causing mismatches during dev/staging
+      name: process.env.NODE_ENV === 'production' && process.env.NEXTAUTH_URL?.startsWith('https') 
+        ? `__Secure-next-auth.session-token` 
+        : `next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        domain: '.acadocai.com', 
-        secure: process.env.NODE_ENV === 'production'
+        domain: '.acadocai.com', // MUST MATCH LANDING PAGE
+        secure: process.env.NODE_ENV === 'production' && process.env.NEXTAUTH_URL?.startsWith('https')
       }
     }
   },
-  adapter: SurrealDBAdapter(initDb() as any),
   providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    }),
     Credentials({
       name: "AcaDoc Secure Access",
       credentials: {
@@ -36,17 +40,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         
-        const user = await findByEmail(credentials.email as string);
-        
-        // Security: Securely validate password hash
-        if (user && (user as any).password) {
-          // Fallback for legacy admin plaintext password to prevent lockout during dev
-          if ((user as any).password === 'adminpassword' && credentials.password === 'adminpassword') {
-             return user;
-          }
-          
-          const isValid = bcrypt.compareSync(credentials.password as string, (user as any).password);
-          if (isValid) return user;
+        // Mock user for POC after SurrealDB removal
+        if (credentials.email === 'admin@acadoc.ai' && credentials.password === 'adminpassword') {
+          return { id: 'admin', email: 'admin@acadoc.ai', name: 'Admin', role: 'admin' };
         }
         
         return null;
@@ -73,9 +69,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;
+        session.user.email = token.email as string;
         // Inject custom properties for Role-Based Access Control (RBAC)
-        (session.user as any).role = token.role;
-        (session.user as any).isVerified = token.isVerified;
+        (session.user as any).role = token.role || 'student';
+        (session.user as any).isVerified = token.isVerified || false;
       }
       return session;
     },
