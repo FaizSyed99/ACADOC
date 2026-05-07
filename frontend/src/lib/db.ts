@@ -2,7 +2,6 @@ import { Pool } from 'pg';
 
 /**
  * PostgreSQL Connection Pool (Neon DB)
- * Replaces SurrealDB for Token Management & User Profiles.
  */
 
 const globalForPg = globalThis as unknown as { pool: Pool };
