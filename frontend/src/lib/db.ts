@@ -1,49 +1,32 @@
-import Surreal from 'surrealdb.js';
+import { Pool } from 'pg';
 
 /**
- * SurrealDB Singleton Client
- * Technical Plan v1.2 §8: Grounded Retrieval Layer
+ * PostgreSQL Connection Pool (Neon DB)
+ * Replaces SurrealDB for Token Management & User Profiles.
  */
 
-const url = process.env.SURREALDB_URL;
-const user = process.env.SURREALDB_USER;
-const pass = process.env.SURREALDB_PASS;
-const ns = process.env.SURREALDB_NS;
-const database = process.env.SURREALDB_DB;
+const globalForPg = globalThis as unknown as { pool: Pool };
 
-// Environment variables will be validated inside initDb()
-// to prevent Vercel from crashing during static compilation.
+export const pool = globalForPg.pool || new Pool({
+  connectionString: `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}/${process.env.PGDATABASE}?sslmode=require`,
+});
 
-// Use globalThis for better cross-environment singleton support in Next.js
-const globalForSurreal = globalThis as unknown as { surreal: Surreal };
-
-export const db = globalForSurreal.surreal || new Surreal();
-
-if (process.env.NODE_ENV !== 'production') globalForSurreal.surreal = db;
+if (process.env.NODE_ENV !== 'production') globalForPg.pool = pool;
 
 /**
- * Initializes the connection to SurrealDB.
- * Ensures the client is authenticated and scoped to the correct namespace/database.
+ * Helper to execute queries with automatic logging and error handling.
  */
-export async function initDb(): Promise<Surreal> {
-  const currentUrl = url || 'ws://localhost:8000/rpc';
-  const currentUser = user || 'root';
-  const currentPass = pass || 'root';
-  const currentNs = ns || 'acadoc';
-  const currentDb = database || 'prod';
-
-  if (process.env.NODE_ENV === 'production' && (!url || !user || !pass || !ns || !database)) {
-    console.error('❌ Missing SurrealDB environment variables in Vercel');
-    throw new Error('Database configuration missing at runtime.');
-  }
-
+export async function query(text: string, params?: any[]) {
+  const start = Date.now();
   try {
-    await db.connect(currentUrl);
-    await db.signin({ user: currentUser, pass: currentPass });
-    await db.use({ namespace: currentNs, database: currentDb });
-    return db;
+    const res = await pool.query(text, params);
+    const duration = Date.now() - start;
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🐘 [DB QUERY]', { text, duration, rows: res.rowCount });
+    }
+    return res;
   } catch (error) {
-    console.error('SurrealDB connection error:', error);
-    throw new Error('Failed to connect to the medical knowledge base (SurrealDB).');
+    console.error('❌ [DB ERROR]', error);
+    throw error;
   }
 }

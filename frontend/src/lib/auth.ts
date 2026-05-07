@@ -2,6 +2,7 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
+import { findByEmail } from "./dal/users"
 
 /**
  * NextAuth Configuration: Credentials Mode
@@ -40,7 +41,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         
-        // Mock user for POC after SurrealDB removal
+        const user = await findByEmail(credentials.email as string);
+        
+        // Handle real user validation
+        if (user && (user as any).password) {
+           const isValid = bcrypt.compareSync(credentials.password as string, (user as any).password);
+           if (isValid) return user;
+        }
+        
+        // Legacy mock fallback for POC
         if (credentials.email === 'admin@acadoc.ai' && credentials.password === 'adminpassword') {
           return { id: 'admin', email: 'admin@acadoc.ai', name: 'Admin', role: 'admin' };
         }
