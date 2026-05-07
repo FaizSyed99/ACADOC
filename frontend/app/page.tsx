@@ -244,9 +244,35 @@ function HomeContent() {
                   ) : (
                     <div className="glass-card rounded-2xl rounded-tl-sm p-5 space-y-3">
                       <div className="leading-relaxed text-sm md:text-base prose prose-invert max-w-none text-slate-200 prose-headings:font-bold prose-a:text-blue-400 prose-p:leading-relaxed prose-strong:text-white">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {m.content}
-                        </ReactMarkdown>
+                        {m.content.split(/(<MemoryCard[^>]*>[\s\S]*?<\/MemoryCard>)/g).map((part, partIdx) => {
+                          const match = part.match(/<MemoryCard[^>]*color="([^"]*)"[^>]*>([\s\S]*?)<\/MemoryCard>/) || part.match(/<MemoryCard[^>]*>([\s\S]*?)<\/MemoryCard>/);
+                          if (match) {
+                            const color = part.match(/color="([^"]*)"/)?.[1] || "#0ea5e9";
+                            const content = match[match.length - 1]; // content is always the last capture group
+                            return (
+                              <div key={partIdx} className="my-6 p-6 rounded-2xl border backdrop-blur-md shadow-2xl relative overflow-hidden" style={{ borderColor: `${color}40`, backgroundColor: `${color}10` }}>
+                                {/* Subtle Background Glow */}
+                                <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${color}, transparent 60%)` }} />
+                                
+                                <div className="flex items-center gap-3 mb-4 relative z-10">
+                                  <div className="p-2 rounded-xl flex items-center justify-center border" style={{ backgroundColor: `${color}20`, borderColor: `${color}30` }}>
+                                    <Brain className="w-5 h-5" style={{ color }} />
+                                  </div>
+                                  <h3 className="font-bold uppercase tracking-widest text-sm" style={{ color }}>Smart Mnemonic</h3>
+                                </div>
+                                
+                                <div className="text-sm prose prose-invert max-w-none relative z-10 prose-strong:text-white">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <ReactMarkdown key={partIdx} remarkPlugins={[remarkGfm]}>
+                              {part}
+                            </ReactMarkdown>
+                          );
+                        })}
                       </div>
 
                       {/* Validation & Citations */}
