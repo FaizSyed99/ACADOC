@@ -82,3 +82,49 @@ export async function update(id: string, input: Partial<CreateUserInput>): Promi
     throw new Error('Failed to update user account.');
   }
 }
+/**
+ * List all users with filtering and pagination for the Admin Dashboard.
+ */
+export async function list({ 
+  page = 1, 
+  limit = 10, 
+  search = '', 
+  role 
+}: { 
+  page?: number; 
+  limit?: number; 
+  search?: string; 
+  role?: string; 
+}) {
+  const offset = (page - 1) * limit;
+  const params: any[] = [limit, offset];
+  let queryStr = 'SELECT * FROM users';
+  const filters: string[] = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    filters.push(`(name ILIKE $${params.length} OR email ILIKE $${params.length})`);
+  }
+  
+  if (role) {
+    params.push(role);
+    filters.push(`role = $${params.length}`);
+  }
+
+  if (filters.length > 0) {
+    queryStr += ` WHERE ${filters.join(' AND ')}`;
+  }
+
+  queryStr += ` ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
+
+  try {
+    const res = await query(queryStr, params);
+    return res.rows.map(u => userSchema.parse({
+      ...u,
+      createdAt: new Date(u.created_at)
+    }));
+  } catch (error) {
+    console.error(`DAL List Users Error:`, error);
+    throw new Error('Failed to list users.');
+  }
+}
