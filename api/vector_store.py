@@ -11,6 +11,7 @@ import json
 import re
 import faiss
 import numpy as np
+import psycopg2
 from typing import List, Optional, Dict, Any
 from sentence_transformers import SentenceTransformer
 from langchain_core.documents import Document
@@ -169,16 +170,77 @@ class VectorStoreManager:
         similarity_threshold: float = 0.0
     ) -> Dict[str, Any]:
         """
-        Search FAISS index with hybrid search (Semantic + Keyword).
-        Optimized for medical/academic textbook content.
+        Search Neon DB (pgvector) as Primary, with FAISS as fallback.
+        Implements Hierarchical Chunking (Child matching -> Parent retrieval).
         """
+        # Generate query embedding
+        query_embedding_list = self.model.encode([query_text])[0].tolist()
+        
+        # --- PRIMARY: Neon DB pgvector ---
+        try:
+            conn = psycopg2.connect(
+                host=os.getenv("PGHOST"),
+                database=os.getenv("PGDATABASE"),
+                user=os.getenv("PGUSER"),
+                password=os.getenv("PGPASSWORD"),
+                sslmode=os.getenv("PGSSLMODE", "require")
+            )
+            cur = conn.cursor()
+            
+            # Retrieve closest child chunks, then fetch their parent documents
+            # pgvector <=> operator computes cosine distance. We order by this.
+            cur.execute("""
+                SELECT p.text, p.metadata, c.embedding <=> %s::vector AS distance
+                FROM child_chunks c
+                JOIN parent_documents p ON c.parent_id = p.id
+                ORDER BY distance ASC
+                LIMIT %s;
+            """, (str(query_embedding_list), n_results))
+            
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            
+            if rows:
+                logger.info("✅ Neon DB (pgvector) hierarchical retrieval successful")
+                
+                # Format to match FAISS output structure for compatibility with agents.py
+                documents = []
+                metadatas = []
+                distances = []
+                
+                seen_parents = set()
+                
+                for row in rows:
+                    parent_text, metadata, dist = row
+                    
+                    # Prevent duplicate parent chunks from flooding the context
+                    if parent_text in seen_parents:
+                        continue
+                    seen_parents.add(parent_text)
+                    
+                    documents.append(parent_text)
+                    metadatas.append(metadata if isinstance(metadata, dict) else json.loads(metadata))
+                    distances.append(float(dist))
+                    
+                return {
+                    "documents": [documents],
+                    "metadatas": [metadatas],
+                    "distances": [distances],
+                    "scores": [[1 - d for d in distances]] # Rough similarity conversion
+                }
+            else:
+                logger.warning("⚠️ Neon DB returned no results. Falling back to FAISS.")
+        except Exception as e:
+            logger.error(f"❌ Neon DB (pgvector) failed: {e}. Falling back to FAISS.")
+
+        # --- FALLBACK: FAISS ---
         if self.index is None or not self.chunks:
-            logger.warning("⚠️ Index not loaded or empty")
+            logger.warning("⚠️ FAISS Index not loaded or empty")
             return {"documents": [[]], "metadatas": [[]], "distances": [[]], "scores": [[]]}
             
-        # Generate query embedding
-        query_embedding = self.model.encode([query_text])
-        query_embedding = np.array(query_embedding).astype("float32")
+        # Generate query embedding (FAISS expects numpy array)
+        query_embedding = np.array([query_embedding_list]).astype("float32")
         
         # Safe search: don't request more than we have
         safe_n_results = min(max(n_results * 2, 20), len(self.chunks))
@@ -208,7 +270,7 @@ class VectorStoreManager:
         
         if query_words:
             for idx, chunk in enumerate(self.chunks):
-                content = chunk.get("content", "").lower()
+                content = chunk.get("content", chunk.get("text", "")).lower()
                 # Score: count exact word matches + phrase bonuses
                 score = sum(1 for w in query_words if w in content)
                 
@@ -249,32 +311,44 @@ class VectorStoreManager:
                 seen_idx.add(item["idx"])
                 blended.append(item)
         
-        # Format output
-        filtered_docs = []
-        filtered_metas = []
-        filtered_dists = []
-        filtered_scores = []
+        # Final FAISS formatting
+        documents = []
+        metadatas = []
+        distances = []
         
+        # Load parent dict if available for FAISS hierarchical fallback
+        parent_dict = {}
+        parents_path = os.path.join(self.persist_dir, "parents.json")
+        if os.path.exists(parents_path):
+            with open(parents_path, "r", encoding="utf-8") as f:
+                parent_dict = json.load(f)
+                
+        seen_parents = set()
+
         for item in blended:
             chunk = item["chunk"]
-            filtered_docs.append(chunk.get("content", ""))
-            filtered_metas.append({
-                "page": chunk.get("page", "N/A"),
-                "source": chunk.get("source", "Unknown"),
-                "file_name": chunk.get("file_name", "Unknown"),
-                "chapter": chunk.get("chapter", "Unknown"),
-                "topic": chunk.get("topic", "General")
-            })
-            filtered_dists.append(item.get("distance", 0.0))
-            filtered_scores.append(item.get("similarity", item.get("score", 0.0)))
-        
-        logger.debug(f"🔍 Query '{query_text[:50]}...' → {len(filtered_docs)} results")
+            # Try to resolve parent text if hierarchical chunking was used
+            parent_id = chunk.get("parent_id")
+            if parent_id and parent_dict.get(parent_id):
+                final_text = parent_dict[parent_id]
+            else:
+                final_text = chunk.get("content", chunk.get("text", ""))
+                
+            if final_text in seen_parents:
+                continue
+            seen_parents.add(final_text)
+            
+            documents.append(final_text)
+            metadatas.append(chunk.get("metadata", {}))
+            distances.append(item.get("distance", 0.0))
+
+        logger.debug(f"🔍 Query '{query_text[:50]}...' → {len(documents)} results")
         
         return {
-            "documents": [filtered_docs],
-            "metadatas": [filtered_metas],
-            "distances": [filtered_dists],
-            "scores": [filtered_scores]
+            "documents": [documents],
+            "metadatas": [metadatas],
+            "distances": [distances],
+            "scores": [[item.get("similarity", item.get("score", 0.0)) for item in blended]]
         }
 
     async def retrieve(self, query_text: str, n_results: int = 8) -> List[Dict[str, Any]]:

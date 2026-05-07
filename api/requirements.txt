@@ -33,3 +33,5 @@ requests>=2.33.1
 # === DB ===
 surrealdb>=1.0.8
 websockets>=16.0
+psycopg2-binary>=2.9.9
+pgvector>=0.2.5

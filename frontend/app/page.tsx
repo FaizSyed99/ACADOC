@@ -35,8 +35,12 @@ function HomeContent() {
   const [subject, setSubject] = useState(searchParams.get('subject') || 'Community Medicine');
   const [intent, setIntent] = useState('Revise');
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
 
   useEffect(() => {
+    // Generate a simple unique session ID for memory caching
+    setSessionId(Math.random().toString(36).substring(2, 15));
+    
     const s = searchParams.get('subject');
     if (s) setSubject(s);
   }, [searchParams]);
@@ -65,7 +69,8 @@ function HomeContent() {
         body: JSON.stringify({
           query: input,
           subject: subject,
-          intent: intent
+          intent: intent,
+          user_id: sessionId
         }),
       });
 

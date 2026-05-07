@@ -130,7 +130,7 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
 # MAIN PIPELINE
 # ==============================================================================
 
-async def run_pipeline(question: str, vector_store, llm, subject: str = "Community Medicine", intent: str = "Revise", system_prompt: Optional[str] = None) -> dict:
+async def run_pipeline(question: str, vector_store, llm, subject: str = "Community Medicine", intent: str = "Revise", system_prompt: Optional[str] = None, conversation_history: Optional[List[Dict]] = None) -> dict:
     """
     Main async pipeline for AcaDoc AI.
     """
@@ -193,6 +193,21 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
             for c in retrieved
         ])
         
+        # Build Conversation History String
+        history_text = ""
+        is_add_up_scenario = False
+        if conversation_history:
+            history_text = "Conversation History:\n"
+            for msg in conversation_history[-4:]: # Keep last 4 turns
+                role = "User" if msg.get("role") == "user" else "AcaDoc"
+                history_text += f"{role}: {msg.get('content')}\n"
+            
+            # Detect add-up
+            q_lower = question.lower()
+            add_up_keywords = ["add", "elaborate", "expand", "what about", "also include", "incorporate", "continue", "this", "follow up", "follow-up"]
+            if any(kw in q_lower for kw in add_up_keywords):
+                is_add_up_scenario = True
+
         intent_normalized = intent.lower() if intent else "revise"
         intent_instructions = ""
         if intent_normalized == "revise":
@@ -222,25 +237,39 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
             6. Tone: Extremely concise. Eliminate all filler words.
             """
 
+        add_up_instruction = ""
+        if is_add_up_scenario:
+            add_up_instruction = """
+            DETECTED ADD-UP SCENARIO: Follow these specific instructions:
+            1. [Recap]: Acknowledge the previous context and state what you are building upon.
+            2. [Merge]: Combine the old logic from the history with the new evidence from the current context. Provide the Integrated Full Answer, not just the add-on.
+            3. [Paper-Trace]: Ensure the footer cites ALL referenced years and subjects involved in the cumulative answer.
+            """
+
         # Use system_prompt if provided, otherwise default
         base_persona = system_prompt if system_prompt else "You are AcaDoc AI, a textbook-grounded medical tutor for a 3rd Year MBBS student."
         
         prompt = f"""{base_persona}
-Address the user input using ONLY the provided context. If information is missing, state so explicitly.
+Address the user input using ONLY the provided context and history. If information is missing, state so explicitly.
 Keep your tone academic, slightly humorous, professional, and clinical.
 
 Subject: {subject}
 Study Mode: {intent}
-User Input: {question}
 
-Context:
+{history_text}
+
+Current User Input: {question}
+
+Retrieved Context:
 {context_text}
 
 Instructions:
-1. Answer directly based on the context.
+1. Answer directly based on the context. Do NOT start with a preamble introducing your role or stating what you are going to do. Jump straight into the content.
 2. {intent_instructions}
-3. Do NOT add outside information not found in the context.
-4. If the context is insufficient, state what is missing.
+3. {add_up_instruction}
+4. Do NOT add outside information not found in the context.
+5. If the context is insufficient, state what is missing, but do it concisely without long apologies.
+6. Skip any sections of the requested format if the context does not provide the relevant information. Do not mention that you are skipping them.
 
 Response:"""
 

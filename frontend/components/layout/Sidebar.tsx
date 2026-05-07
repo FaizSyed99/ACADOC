@@ -40,14 +40,13 @@ export default function Sidebar({ subject, setSubject, intent, setIntent }: Side
         {/* Explore Section */}
         <div className="flex flex-col gap-2 w-full items-center">
           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1 opacity-50">Explore</span>
-          
+
           <Link href="/subjects" className="w-full px-2">
             <button
-              className={`flex flex-col items-center justify-center w-full py-2.5 rounded-xl transition-all duration-300 group relative ${
-                isSubjectsPage 
-                  ? 'text-primary bg-primary/10 shadow-[inset_0_0_20px_rgba(8,154,155,0.15)] border border-primary/20 border-l-4 border-l-primary' 
+              className={`flex flex-col items-center justify-center w-full py-2.5 rounded-xl transition-all duration-300 group relative ${isSubjectsPage
+                  ? 'text-primary bg-primary/10 shadow-[inset_0_0_20px_rgba(8,154,155,0.15)] border border-primary/20 border-l-4 border-l-primary'
                   : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-              }`}
+                }`}
             >
               <Library className={`w-5 h-5 mb-1 transition-transform duration-300 group-hover:scale-110 ${isSubjectsPage ? 'drop-shadow-[0_0_8px_rgba(8,154,155,0.5)]' : ''}`} />
               <span className="text-[9px] font-bold uppercase tracking-widest">Library</span>
@@ -57,7 +56,7 @@ export default function Sidebar({ subject, setSubject, intent, setIntent }: Side
 
         {/* Modes Section */}
         <div className="flex flex-col gap-2 w-full items-center">
-           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1 opacity-50">Modes</span>
+          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-1 opacity-50">Modes</span>
           {INTENTS.map((mode) => {
             const Icon = mode.icon;
             const isActive = intent === mode.id && isHomePage;
@@ -65,11 +64,10 @@ export default function Sidebar({ subject, setSubject, intent, setIntent }: Side
               <button
                 key={mode.id}
                 onClick={() => setIntent(mode.id)}
-                className={`flex flex-col items-center justify-center w-full py-2.5 px-2 rounded-xl transition-all duration-300 group relative ${
-                  isActive 
-                    ? 'text-primary bg-primary/10 shadow-[inset_0_0_20px_rgba(8,154,155,0.15)] border border-primary/20 border-l-4 border-l-primary' 
+                className={`flex flex-col items-center justify-center w-full py-2.5 px-2 rounded-xl transition-all duration-300 group relative ${isActive
+                    ? 'text-primary bg-primary/10 shadow-[inset_0_0_20px_rgba(8,154,155,0.15)] border border-primary/20 border-l-4 border-l-primary'
                     : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
-                }`}
+                  }`}
               >
                 <Icon className={`w-5 h-5 mb-1 transition-transform duration-300 group-hover:scale-110 ${isActive ? 'drop-shadow-[0_0_8px_rgba(8,154,155,0.5)]' : ''}`} />
                 <span className="text-[9px] font-bold uppercase tracking-widest">{mode.label}</span>

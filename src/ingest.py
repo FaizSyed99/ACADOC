@@ -13,7 +13,7 @@ from typing import List
 
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 logging.basicConfig(level=logging.INFO)
@@ -25,100 +25,44 @@ def clean_text(text: str) -> str:
     text = re.sub(r"\n{2,}", "\n", text)
     return text.strip()
 
-def is_chapter_keyword(line: str) -> bool:
-    return line.strip() == "CHAPTER"
-
-def is_topic(line: str) -> bool:
-    return (
-        line.isupper()
-        and 2 <= len(line.split()) <= 10
-        and not line.startswith("SECTION")
-        and not line.startswith("CHAPTER")
-        and not re.match(r"^CHAPTER\s*\d*", line)
-        and not any(char.isdigit() for char in line)
-        and len(line) > 8
-    )
-
-def is_noise(line: str) -> bool:
-    if len(line) < 3: return True
-    if re.match(r"^\d+$", line): return True
-    if line.startswith("Fig"): return True
-    return False
-
 def ingest_pdf(pdf_path: str) -> List[Document]:
-    """Ingest PDF documents using PyMuPDF."""
+    """Ingest PDF documents using PyMuPDF and robust text splitting."""
     logger.info(f"Ingesting PDF: {pdf_path}")
     path = Path(pdf_path)
     if not path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
     doc = fitz.open(pdf_path)
-    current_chapter = "Unknown"
-    current_topic = "General"
-    current_content = []
     documents = []
-    expecting_chapter_title = False
-    chapter_number = None
-
-    def flush_chunk(page_num):
-        nonlocal current_content, current_chapter, current_topic
-        if not current_content or not current_topic:
-            current_content = []
-            return
-
-        content = " ".join(current_content).strip()
-        if len(content.split()) < 5:
-            current_content = []
-            return
-
-        doc_obj = Document(
-            page_content=content,
-            metadata={
-                "source": str(path.absolute()),
-                "file_name": path.name,
-                "page": page_num + 1,
-                "chapter": current_chapter,
-                "topic": current_topic
-            }
-        )
-        documents.append(doc_obj)
-        current_content = []
+    
+    # Robust chunking for huge textbooks (Gray's) and dense PYQs
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1500,
+        chunk_overlap=200,
+        length_function=len,
+        separators=["\n\n", "\n", ".", " ", ""]
+    )
 
     for page_num, page in enumerate(doc):
         text = clean_text(page.get_text("text"))
-        lines = text.split("\n")
+        if not text.strip(): continue
+        
+        chunks = text_splitter.split_text(text)
+        
+        for chunk in chunks:
+            # Skip tiny, useless chunks
+            if len(chunk.split()) < 5: continue
+            
+            doc_obj = Document(
+                page_content=chunk,
+                metadata={
+                    "source": str(path.absolute()),
+                    "file_name": path.name,
+                    "page": page_num + 1
+                }
+            )
+            documents.append(doc_obj)
 
-        for line in lines:
-            line = line.strip()
-            if not line or is_noise(line): continue
-            if line.startswith("SECTION"): continue
-
-            if is_chapter_keyword(line):
-                expecting_chapter_title = True
-                continue
-            elif expecting_chapter_title:
-                flush_chunk(page_num)
-                if re.match(r"^\d+$", line):
-                    chapter_number = line
-                    expecting_chapter_title = "title"
-                    continue
-                else:
-                    current_chapter = f"{chapter_number} {line}" if chapter_number else line
-                    expecting_chapter_title = False
-                    continue
-            elif expecting_chapter_title == "title":
-                current_chapter = f"{chapter_number} {line}"
-                expecting_chapter_title = False
-                continue
-
-            if is_topic(line):
-                flush_chunk(page_num)
-                current_topic = line
-                continue
-
-            current_content.append(line)
-
-    flush_chunk(doc.page_count - 1)
     logger.info(f"Ingestion complete: {len(documents)} chunks created.")
     return documents
 
