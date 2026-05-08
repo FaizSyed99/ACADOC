@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Send, BookOpen, ShieldCheck, AlertCircle, ChevronDown, List, Brain, MessageSquareHeart, GraduationCap } from 'lucide-react';
 import Sidebar from '../components/layout/Sidebar';
 import FeedbackModal from '../components/ui/FeedbackModal';
+import UserNav from '../components/ui/UserNav';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -31,19 +32,56 @@ function HomeContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // New States for Sidebar
+  // New States for Sidebar & Token Management
   const [subject, setSubject] = useState(searchParams.get('subject') || 'Community Medicine');
   const [intent, setIntent] = useState('Revise');
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+<<<<<<< HEAD
   const [sessionId, setSessionId] = useState<string>('');
+=======
+  const [feedbackAnswerId, setFeedbackAnswerId] = useState<string | undefined>(undefined);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(searchParams.get('session'));
+  
+  // Token Management States (§11)
+  const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
+  const [totalQuota, setTotalQuota] = useState<number | null>(null);
+  const [quotaAlert, setQuotaAlert] = useState<'none' | 'warning' | 'hard-stop'>('none');
+
+  const router = useRouter();
+>>>>>>> 8e0541c62e9f3d0671ccde66e1831c4f33e95cfc
 
   useEffect(() => {
     // Generate a simple unique session ID for memory caching
     setSessionId(Math.random().toString(36).substring(2, 15));
     
     const s = searchParams.get('subject');
-    if (s) setSubject(s);
-  }, [searchParams]);
+    const sess = searchParams.get('session');
+    
+    if (s) {
+      setSubject(s);
+    } else {
+      router.push('/subjects');
+    }
+    
+    if (sess && sess !== currentSessionId) {
+      setCurrentSessionId(sess);
+      // Fetch messages for this session
+      setIsLoading(true);
+      fetch(`/api/sessions/${sess}`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setMessages(data);
+          }
+        })
+        .catch(console.error)
+        .finally(() => setIsLoading(false));
+    } else if (!sess && currentSessionId) {
+      // New chat
+      setCurrentSessionId(null);
+      setMessages([]);
+    }
+  }, [searchParams, router]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -59,8 +97,29 @@ function HomeContent() {
 
     const userMessage: Message = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
+
+    let sessionId = currentSessionId;
+    if (!sessionId && messages.length === 0) {
+      try {
+        const sessionRes = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, intent, summary: currentInput.substring(0, 50) + "..." })
+        });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          sessionId = sessionData.session?.id;
+          setCurrentSessionId(sessionId);
+          // Optional: Update URL without full reload
+          window.history.pushState(null, '', `/?subject=${encodeURIComponent(subject)}&session=${sessionId}`);
+        }
+      } catch (e) {
+        console.error("Failed to create session", e);
+      }
+    }
 
     try {
       const response = await fetch('/api/chat', {
@@ -82,6 +141,21 @@ function HomeContent() {
 
       const data = await response.json();
 
+      // Update Token Management State (§11)
+      if (data.tokens_remaining !== undefined) {
+        setTokensRemaining(data.tokens_remaining);
+        setTotalQuota(data.total_quota);
+        
+        // 🚨 Hard Stop Logic
+        if (data.is_allowed === false) {
+          setQuotaAlert('hard-stop');
+        } 
+        // 🩺 Smart Threshold Logic ( < 15% remaining)
+        else if (data.tokens_remaining < (data.total_quota * 0.15)) {
+          setQuotaAlert('warning');
+        }
+      }
+
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.answer,
@@ -92,6 +166,21 @@ function HomeContent() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Save messages asynchronously
+      if (sessionId) {
+        fetch(`/api/sessions/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: userMessage })
+        }).catch(console.error);
+
+        fetch(`/api/sessions/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: assistantMessage })
+        }).catch(console.error);
+      }
     } catch (error) {
       console.error(error);
       setMessages((prev) => [
@@ -147,6 +236,8 @@ function HomeContent() {
             >
               <MessageSquareHeart className="w-5 h-5" />
             </button>
+            <div className="h-6 w-[1px] bg-white/10" />
+            <UserNav />
           </div>
         </header>
 
@@ -197,9 +288,35 @@ function HomeContent() {
                   ) : (
                     <div className="glass-card rounded-2xl rounded-tl-sm p-5 space-y-3">
                       <div className="leading-relaxed text-sm md:text-base prose prose-invert max-w-none text-slate-200 prose-headings:font-bold prose-a:text-blue-400 prose-p:leading-relaxed prose-strong:text-white">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {m.content}
-                        </ReactMarkdown>
+                        {m.content.split(/(<MemoryCard[^>]*>[\s\S]*?<\/MemoryCard>)/g).map((part, partIdx) => {
+                          const match = part.match(/<MemoryCard[^>]*color="([^"]*)"[^>]*>([\s\S]*?)<\/MemoryCard>/) || part.match(/<MemoryCard[^>]*>([\s\S]*?)<\/MemoryCard>/);
+                          if (match) {
+                            const color = part.match(/color="([^"]*)"/)?.[1] || "#0ea5e9";
+                            const content = match[match.length - 1]; // content is always the last capture group
+                            return (
+                              <div key={partIdx} className="my-6 p-6 rounded-2xl border backdrop-blur-md shadow-2xl relative overflow-hidden" style={{ borderColor: `${color}40`, backgroundColor: `${color}10` }}>
+                                {/* Subtle Background Glow */}
+                                <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${color}, transparent 60%)` }} />
+                                
+                                <div className="flex items-center gap-3 mb-4 relative z-10">
+                                  <div className="p-2 rounded-xl flex items-center justify-center border" style={{ backgroundColor: `${color}20`, borderColor: `${color}30` }}>
+                                    <Brain className="w-5 h-5" style={{ color }} />
+                                  </div>
+                                  <h3 className="font-bold uppercase tracking-widest text-sm" style={{ color }}>Smart Mnemonic</h3>
+                                </div>
+                                
+                                <div className="text-sm prose prose-invert max-w-none relative z-10 prose-strong:text-white">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <ReactMarkdown key={partIdx} remarkPlugins={[remarkGfm]}>
+                              {part}
+                            </ReactMarkdown>
+                          );
+                        })}
                       </div>
 
                       {/* Validation & Citations */}
@@ -215,7 +332,7 @@ function HomeContent() {
                         )}
 
                         {m.citations && m.citations.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap gap-1.5 mb-3">
                             {m.citations.map((c, ci) => (
                               <div key={ci} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 text-slate-400 rounded-md text-[9px] font-bold border border-white/5">
                                 <List className="w-2.5 h-2.5" />
@@ -224,6 +341,20 @@ function HomeContent() {
                             ))}
                           </div>
                         )}
+                        
+                        {/* Rate Response Button */}
+                        <div className="flex justify-end border-t border-white/5 pt-2 mt-2">
+                          <button 
+                            onClick={() => {
+                              setFeedbackAnswerId(`msg-${i}`);
+                              setIsFeedbackOpen(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors group"
+                          >
+                            <MessageSquareHeart className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                            Rate Response
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -276,9 +407,55 @@ function HomeContent() {
             AcaDoc AI • Curriculum Grounded • Zero Hallucination
           </p>
         </div>
+
+        {/* Token Management Alerts (§11) */}
+        {quotaAlert !== 'none' && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className={`max-w-md w-full glass-card p-8 border-2 ${quotaAlert === 'hard-stop' ? 'border-red-500/50' : 'border-amber-500/50'} space-y-6 text-center shadow-2xl`}>
+              <div className="flex justify-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${quotaAlert === 'hard-stop' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                  {quotaAlert === 'hard-stop' ? <AlertCircle className="w-8 h-8" /> : <ShieldCheck className="w-8 h-8" />}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <h3 className={`text-xl font-bold ${quotaAlert === 'hard-stop' ? 'text-red-400' : 'text-amber-400'}`}>
+                  {quotaAlert === 'hard-stop' ? '⛔ Access Paused' : '🩺 Academic Resource Alert'}
+                </h3>
+                <p className="text-slate-300 text-sm leading-relaxed">
+                  {quotaAlert === 'hard-stop' 
+                    ? "Your daily curriculum allotment is reached. Access to the Medical Intelligence Suite will reset at midnight."
+                    : "Your current session is nearing its capacity. You have enough for approximately 2 more clinical queries."}
+                </p>
+              </div>
+
+              {quotaAlert === 'warning' && (
+                <button 
+                  onClick={() => setQuotaAlert('none')}
+                  className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-amber-500/30"
+                >
+                  Acknowledge & Continue
+                </button>
+              )}
+
+              {quotaAlert === 'hard-stop' && (
+                <button 
+                  onClick={() => window.location.href = 'https://acadocai.com'}
+                  className="w-full py-3 bg-red-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
+                >
+                  Return to Dashboard
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
-      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      <FeedbackModal 
+        isOpen={isFeedbackOpen} 
+        onClose={() => setIsFeedbackOpen(false)} 
+        answerId={feedbackAnswerId}
+      />
     </div>
   );
 }

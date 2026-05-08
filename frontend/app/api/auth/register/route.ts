@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
     // Securely hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create the user record in SurrealDB
     const newUser = await UserDAL.create({
       name,
       email,

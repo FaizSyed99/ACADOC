@@ -1,29 +1,22 @@
-import { db, initDb } from '../db';
-import { ActivityAction, ActivityLog, activitySchema } from '../models/activity';
+import { query } from '@/src/lib/db';
 
 /**
  * Record a user action for auditing and clinical compliance.
- * Technical Plan §9: Mandatory for near-zero hallucination audit trails.
+ * Updated to use PostgreSQL usage_logs table logic.
  */
 export async function recordActivity(
-  userId: string, 
-  action: ActivityAction, 
-  metadata: Record<string, any> = {},
-  ip?: string
-): Promise<ActivityLog> {
-  await initDb();
+  email: string, 
+  queryText: string, 
+  tokensConsumed: number = 0
+) {
   try {
-    const [log] = await db.create<ActivityLog>('activity_log', {
-      userId,
-      action,
-      metadata,
-      ip,
-      timestamp: new Date(),
-    });
-    return activitySchema.parse(log);
+    await query(
+      'INSERT INTO usage_logs (email, query_text, tokens_consumed) VALUES ($1, $2, $3)',
+      [email, queryText, tokensConsumed]
+    );
   } catch (error) {
     console.error('DAL Record Activity Error:', error);
-    throw new Error('Failed to log user activity.');
+    // Don't throw, logging failure shouldn't crash the app
   }
 }
 
@@ -31,25 +24,24 @@ export async function recordActivity(
  * Retrieve activity history for a specific user.
  */
 export async function getUserActivity(
-  userId: string, 
+  email: string, 
   { limit = 50, startDate }: { limit?: number; startDate?: Date } = {}
-): Promise<ActivityLog[]> {
-  await initDb();
-  let q = 'SELECT * FROM activity_log WHERE userId = $userId';
-  const params: any = { userId, limit };
-
-  if (startDate) {
-    q += ' AND timestamp >= $startDate';
-    params.startDate = startDate;
-  }
-
-  q += ' ORDER BY timestamp DESC LIMIT $limit';
-
+) {
   try {
-    const [results] = await db.query<ActivityLog[][]>(q, params);
-    return (results || []).map(l => activitySchema.parse(l));
+    let queryStr = 'SELECT * FROM usage_logs WHERE email = $1';
+    const params: any[] = [email, limit];
+
+    if (startDate) {
+      params.push(startDate);
+      queryStr += ` AND timestamp >= $3`;
+    }
+
+    queryStr += ' ORDER BY timestamp DESC LIMIT $2';
+
+    const res = await query(queryStr, params);
+    return res.rows;
   } catch (error) {
     console.error('DAL Get User Activity Error:', error);
-    throw new Error('Failed to retrieve activity history.');
+    return [];
   }
 }

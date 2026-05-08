@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { UserTable } from "../../../../src/components/admin/UserTable";
 import { Users, UserPlus } from "lucide-react";
 

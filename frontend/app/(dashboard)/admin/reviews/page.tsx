@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { ClipboardList } from "lucide-react";
 import { ModerationWrapper } from "../../../../src/components/admin/ModerationWrapper";
 

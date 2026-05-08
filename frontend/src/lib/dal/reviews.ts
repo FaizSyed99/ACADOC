@@ -1,18 +1,15 @@
-import { db, initDb } from '../db';
-import { Review, ModerationStatus, reviewSchema } from '../models/review';
+import { query } from '@/src/lib/db';
 
 /**
  * Submit a new textbook content review for moderation.
  */
-export async function submitReview(input: Omit<Review, 'id' | 'status' | 'createdAt'>): Promise<Review> {
-  await initDb();
+export async function submitReview(input: any) {
   try {
-    const [created] = await db.create<Review>('review', {
-      ...input,
-      status: 'pending',
-      createdAt: new Date(),
-    });
-    return reviewSchema.parse(created);
+    const res = await query(
+      'INSERT INTO reviews (user_id, content_id, rating, comment, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [input.userId, input.contentId, input.rating, input.comment, 'pending']
+    );
+    return res.rows[0];
   } catch (error) {
     console.error('DAL Submit Review Error:', error);
     throw new Error('Failed to submit review.');
@@ -22,11 +19,10 @@ export async function submitReview(input: Omit<Review, 'id' | 'status' | 'create
 /**
  * Retrieve reviews awaiting admin moderation.
  */
-export async function getPendingReviews(): Promise<Review[]> {
-  await initDb();
+export async function getPendingReviews() {
   try {
-    const [results] = await db.query<Review[][]>('SELECT * FROM review WHERE status = "pending" ORDER BY createdAt ASC');
-    return (results || []).map(r => reviewSchema.parse(r));
+    const res = await query('SELECT * FROM reviews WHERE status = $1 ORDER BY created_at ASC', ['pending']);
+    return res.rows;
   } catch (error) {
     console.error('DAL Get Pending Reviews Error:', error);
     throw new Error('Failed to retrieve review queue.');
@@ -36,15 +32,13 @@ export async function getPendingReviews(): Promise<Review[]> {
 /**
  * Update the moderation status of a user review.
  */
-export async function moderateReview(id: string, status: ModerationStatus, adminId: string) {
-  await initDb();
+export async function moderateReview(id: string, status: string, adminId: string) {
   try {
-    const [updated] = await db.merge<Review>(id, {
-      status,
-      moderatedBy: adminId, // Note: Schema might need update if we track moderator
-      moderatedAt: new Date(),
-    });
-    return reviewSchema.parse(updated);
+    const res = await query(
+      'UPDATE reviews SET status = $2, moderated_by = $3, moderated_at = NOW() WHERE id = $1 RETURNING *',
+      [id, status, adminId]
+    );
+    return res.rows[0];
   } catch (error) {
     console.error('DAL Moderate Review Error:', error);
     throw new Error('Failed to moderate review.');

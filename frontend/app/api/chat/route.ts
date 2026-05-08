@@ -1,5 +1,6 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from "../../../src/lib/auth";
 
 let rawUrl = process.env.BACKEND_API_URL || process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
 console.log("🛠️ Initial Backend URL from Env:", rawUrl);
@@ -39,12 +40,40 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
     try {
+        const session = await auth();
+        
+        // Debug session for cross-subdomain troubleshooting
+        if (!session) {
+            console.warn("🔐 [AUTH DEBUG] Session is NULL. Check cookies and NEXTAUTH_SECRET.");
+            const cookies = request.cookies.getAll().map(c => c.name);
+            console.log("🍪 [AUTH DEBUG] Available Cookies:", cookies);
+        }
+
+        if (!session || !session.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const body = await request.json();
+        
+        // --- ⚡ SMART GLOBAL CACHE CHECK ---
+        const { query, subject, intent } = body;
+        if (query && subject && intent) {
+            const { checkGlobalCache, updateGlobalCache } = await import("../../../src/lib/dal/cache");
+            const cachedResponse = await checkGlobalCache(subject, intent, query);
+            
+            if (cachedResponse) {
+                console.log(`⚡ [CACHE HIT] Returning instantly for query: "${query.substring(0, 30)}..."`);
+                return NextResponse.json(cachedResponse);
+            }
+        }
 
         const response = await fetch(`${API_URL}/api/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.INTERNAL_BACKEND_SECRET}`,
+                'X-User-Email': session.user.email || 'unknown',
+                'X-User-Name': session.user.name || 'unknown'
             },
             body: JSON.stringify(body),
         });
@@ -55,6 +84,13 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await response.json();
+        
+        // --- ⚡ UPDATE SMART CACHE ---
+        if (query && subject && intent) {
+            const { updateGlobalCache } = await import("../../../src/lib/dal/cache");
+            await updateGlobalCache(subject, intent, query, data);
+        }
+
         return NextResponse.json(data);
 
     } catch (error: any) {
