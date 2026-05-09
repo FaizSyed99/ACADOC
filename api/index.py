@@ -163,6 +163,9 @@ Append the following block to your answer:
 Exam Month/Year: [e.g., November 2025 / Extract from text]
 Question Type: [e.g., Essay Question #11 / Extract from text]
 Cumulative Mentions: [Combine all years/subjects from current and past turns]
+
+CRITICAL RULE:
+NEVER introduce yourself, your role, or explain your thought process. NEVER explain how you categorized the query. Jump DIRECTLY into the final medical answer. Your first sentence MUST be the direct academic answer. DO NOT use introductory filler phrases like "As an expert..." or "I must first categorize...".
 """
 
 SYSTEM_PROMPTS = {

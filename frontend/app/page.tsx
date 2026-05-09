@@ -36,9 +36,7 @@ function HomeContent() {
   const [subject, setSubject] = useState(searchParams.get('subject') || 'Community Medicine');
   const [intent, setIntent] = useState('Revise');
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-<<<<<<< HEAD
   const [sessionId, setSessionId] = useState<string>('');
-=======
   const [feedbackAnswerId, setFeedbackAnswerId] = useState<string | undefined>(undefined);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(searchParams.get('session'));
   
@@ -48,7 +46,6 @@ function HomeContent() {
   const [quotaAlert, setQuotaAlert] = useState<'none' | 'warning' | 'hard-stop'>('none');
 
   const router = useRouter();
->>>>>>> 8e0541c62e9f3d0671ccde66e1831c4f33e95cfc
 
   useEffect(() => {
     // Generate a simple unique session ID for memory caching
