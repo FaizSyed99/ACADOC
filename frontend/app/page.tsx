@@ -2,12 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Send, BookOpen, ShieldCheck, AlertCircle, ChevronDown, List, Brain, MessageSquareHeart, GraduationCap } from 'lucide-react';
+import { Send, Menu, Brain, CheckCircle, AlertCircle, FileText, Activity, PlusCircle } from 'lucide-react';
 import Sidebar from '../components/layout/Sidebar';
 import FeedbackModal from '../components/ui/FeedbackModal';
-import UserNav from '../components/ui/UserNav';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Image from 'next/image';
 
 interface Citation {
   source: string;
@@ -24,89 +24,107 @@ interface Message {
   reason?: string;
 }
 
+export const SUBJECTS = [
+  "Community Medicine",
+  "Forensic Medicine",
+  "Ophthalmology",
+  "ENT"
+];
+
 import { Suspense } from 'react';
 
 function HomeContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // New States for Sidebar & Token Management
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
   const [subject, setSubject] = useState(searchParams.get('subject') || 'Community Medicine');
-  const [intent, setIntent] = useState('Revise');
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  const [feedbackAnswerId, setFeedbackAnswerId] = useState<string | undefined>(undefined);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(searchParams.get('session'));
   
-  // Token Management States (§11)
-  const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
-  const [totalQuota, setTotalQuota] = useState<number | null>(null);
-  const [quotaAlert, setQuotaAlert] = useState<'none' | 'warning' | 'hard-stop'>('none');
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [feedbackAnswerId, setFeedbackAnswerId] = useState<string | undefined>(undefined);
 
-  const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const s = searchParams.get('subject');
     const sess = searchParams.get('session');
     
-    if (s) {
-      setSubject(s);
-    } else {
-      router.push('/subjects');
-    }
+    if (s) setSubject(s);
     
     if (sess && sess !== currentSessionId) {
       setCurrentSessionId(sess);
-      // Fetch messages for this session
       setIsLoading(true);
       fetch(`/api/sessions/${sess}`)
         .then(res => res.json())
         .then(data => {
-          if (Array.isArray(data)) {
-            setMessages(data);
-          }
+          if (Array.isArray(data)) setMessages(data);
         })
         .catch(console.error)
         .finally(() => setIsLoading(false));
     } else if (!sess && currentSessionId) {
-      // New chat
       setCurrentSessionId(null);
       setMessages([]);
     }
   }, [searchParams, router]);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const autoResize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent, predefinedInput?: string) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    const queryText = predefinedInput || input;
+    if (!queryText.trim() || isLoading) return;
 
-    const userMessage: Message = { role: 'user', content: input };
+    const userMessage: Message = { role: 'user', content: queryText };
     setMessages((prev) => [...prev, userMessage]);
-    const currentInput = input;
-    setInput('');
+    if (!predefinedInput) setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setIsLoading(true);
 
     let sessionId = currentSessionId;
+    
+    // GA4 Tracking
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', 'message_send', {
+        event_category: 'chat',
+        event_label: subject,
+      });
+    }
+
     if (!sessionId && messages.length === 0) {
       try {
         const sessionRes = await fetch('/api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject, intent, summary: currentInput.substring(0, 50) + "..." })
+          body: JSON.stringify({ subject, intent: 'Revise', summary: queryText.substring(0, 50) + "..." })
         });
         if (sessionRes.ok) {
           const sessionData = await sessionRes.json();
           sessionId = sessionData.session?.id;
           setCurrentSessionId(sessionId);
-          // Optional: Update URL without full reload
           window.history.pushState(null, '', `/?subject=${encodeURIComponent(subject)}&session=${sessionId}`);
         }
       } catch (e) {
@@ -119,34 +137,17 @@ function HomeContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: input,
+          query: queryText,
           subject: subject,
-          intent: intent
+          intent: 'Revise'
         }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("🚨 Backend Error Details:", errorText);
-        throw new Error(`Server Error ${response.status}: ${errorText}`);
+        throw new Error(`Server Error ${response.status}`);
       }
 
       const data = await response.json();
-
-      // Update Token Management State (§11)
-      if (data.tokens_remaining !== undefined) {
-        setTokensRemaining(data.tokens_remaining);
-        setTotalQuota(data.total_quota);
-        
-        // 🚨 Hard Stop Logic
-        if (data.is_allowed === false) {
-          setQuotaAlert('hard-stop');
-        } 
-        // 🩺 Smart Threshold Logic ( < 15% remaining)
-        else if (data.tokens_remaining < (data.total_quota * 0.15)) {
-          setQuotaAlert('warning');
-        }
-      }
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -159,7 +160,6 @@ function HomeContent() {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Save messages asynchronously
       if (sessionId) {
         fetch(`/api/sessions/${sessionId}`, {
           method: 'POST',
@@ -177,276 +177,239 @@ function HomeContent() {
       console.error(error);
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: 'Sorry, I encountered an error. Please try again later.' },
+        { role: 'assistant', content: "An error occurred while connecting to the medical intelligence server. Please try again." }
       ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Helper for dynamic greeting
-  const getWelcomeMessage = () => {
-    if (intent === 'Test') return `Testing: ${subject}`;
-    if (intent === 'Notes') return `Summarizing: ${subject}`;
-    return `Conquering ${subject}`;
-  };
-
-  // Helper for placeholder
-  const getPlaceholder = () => {
-    if (subject === 'Community Medicine') return "Ask about Park's epidemiology triad...";
-    if (subject === 'Forensic Medicine') return "Ask about rigor mortis timeline...";
-    return `Ask a question about ${subject}...`;
-  };
-
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-transparent">
+    <div className="flex h-screen bg-surface-cream overflow-hidden selection:bg-primary/20 selection:text-primary-dark">
+      {/* Sidebar */}
+      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-      {/* Sidebar - Desktop Only */}
-      <Sidebar
-        subject={subject}
-        setSubject={setSubject}
-        intent={intent}
-        setIntent={setIntent}
-      />
-
-      <main className="flex flex-col flex-1 relative overflow-hidden md:pl-24">
-        {/* Header - Glassmorphism */}
-        <header className="flex items-center justify-between px-8 h-16 bg-slate-950/40 backdrop-blur-[20px] border-b border-white/10 z-50 sticky top-0">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Header */}
+        <header className="sticky top-0 z-30 h-[72px] bg-white/90 backdrop-blur-md border-b border-border-subtle flex items-center justify-between px-4 lg:px-6 shrink-0">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-primary tracking-tighter font-manrope antialiased tracking-wide">AcaDoc AI</h1>
-            <div className="h-4 w-[1px] bg-white/10 hidden md:block" />
-            <span className="font-label-caps hidden md:block text-xs">{subject} • {intent}</span>
-          </div>
-          <div className="flex items-center gap-6">
-            <span className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary text-[9px] font-bold uppercase tracking-wider rounded-full border border-primary/20">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Verified Answers
-            </span>
-            <button
-              onClick={() => setIsFeedbackOpen(true)}
-              className="text-slate-400 hover:bg-white/5 hover:text-primary transition-all p-2 rounded-full"
+            <button 
+              className="lg:hidden p-2 -ml-2 text-surface-on-surface-variant hover:text-surface-on-surface rounded-lg hover:bg-slate-50 transition-colors"
+              onClick={() => setIsSidebarOpen(true)}
             >
-              <MessageSquareHeart className="w-5 h-5" />
+              <Menu className="w-6 h-6" />
             </button>
-            <div className="h-6 w-[1px] bg-white/10" />
-            <UserNav />
+            <div className="hidden lg:flex items-center gap-2">
+              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+                <span className="font-serif text-primary font-bold">A</span>
+              </div>
+              <span className="font-serif font-bold text-surface-on-surface text-lg">AcaDoc AI</span>
+            </div>
+          </div>
+
+          <div className="flex-1 max-w-md mx-4 flex justify-center">
+            <select 
+              value={subject}
+              onChange={(e) => {
+                const newSubject = e.target.value;
+                setSubject(newSubject);
+                if (typeof window !== 'undefined' && (window as any).gtag) {
+                  (window as any).gtag('event', 'subject_change', {
+                    event_category: 'navigation',
+                    event_label: newSubject,
+                  });
+                }
+              }}
+              className="border border-border-subtle bg-white text-surface-on-surface rounded-lg px-4 py-2 text-sm font-medium hover:bg-slate-50 transition-colors focus:outline-none focus:border-border-focus focus:ring-1 focus:ring-primary shadow-sm appearance-none cursor-pointer w-full max-w-[240px] text-center"
+              style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
+            >
+              {SUBJECTS.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center">
+            <button 
+              onClick={() => {
+                router.push('/');
+                setMessages([]);
+                setCurrentSessionId(null);
+              }}
+              className="hidden sm:flex bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dark transition-colors items-center gap-2 shadow-sm"
+            >
+              <PlusCircle className="w-4 h-4" />
+              New Chat
+            </button>
           </div>
         </header>
 
-        {/* Chat Area */}
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 scroll-smooth z-10"
-        >
-          {messages.length === 0 && (
-            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-700 mt-4">
-              <header>
-                <h2 className="font-h1 text-on-surface mb-1 text-3xl">{getWelcomeMessage()}</h2>
-                <p className="font-body-lg text-on-surface-variant max-w-2xl text-sm">
-                  Access textbook-grounded medical intelligence. Your answers are strictly derived from verified sources to ensure zero hallucination.
+        {/* Chat Thread */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[200px] scroll-smooth">
+          <div className="max-w-4xl mx-auto px-4 py-8 lg:py-12 flex flex-col gap-6">
+            
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div className="w-24 h-24 bg-primary/5 rounded-full flex items-center justify-center mb-6 relative">
+                  <div className="absolute inset-0 border border-primary/20 rounded-full animate-[ping_3s_ease-in-out_infinite]" />
+                  <Activity className="w-12 h-12 text-primary opacity-80" />
+                </div>
+                <h1 className="font-serif text-3xl lg:text-4xl font-bold text-surface-on-surface mb-3">Welcome to AcaDoc AI</h1>
+                <p className="text-surface-on-surface-variant max-w-md mb-10 text-[15px] leading-relaxed">
+                  Ask textbook-grounded questions about {subject.toLowerCase() || 'any medical topic'}. Every answer is verified against clinical literature.
                 </p>
-              </header>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  { title: 'High Yield', desc: 'Focus on most relevant exam topics', icon: Brain },
-                  { title: 'Deterministic', desc: 'Page-level citations for every fact', icon: BookOpen },
-                  { title: 'Safe', desc: 'Halts when evidence is insufficient', icon: ShieldCheck }
-                ].map((card, i) => (
-                  <div key={i} className="glass-card rounded-xl p-5 glow-hover transition-all duration-300 flex flex-col h-[150px]">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center mb-3 border border-primary/20">
-                      <card.icon className="w-4 h-4 text-primary" />
-                    </div>
-                    <h3 className="font-h2 text-base mb-1">{card.title}</h3>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">{card.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="max-w-4xl mx-auto space-y-6 pb-2">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
-              >
-                <div className={`max-w-[90%] md:max-w-[85%] space-y-2`}>
-
-                  {m.role === 'user' ? (
-                    <div className="px-5 py-3 bg-primary text-white rounded-2xl rounded-tr-sm shadow-lg shadow-primary/20 font-medium text-sm md:text-base">
-                      {m.content}
-                    </div>
-                  ) : (
-                    <div className="glass-card rounded-2xl rounded-tl-sm p-5 space-y-3">
-                      <div className="leading-relaxed text-sm md:text-base prose prose-invert max-w-none text-slate-200 prose-headings:font-bold prose-a:text-blue-400 prose-p:leading-relaxed prose-strong:text-white">
-                        {m.content.split(/(<MemoryCard[^>]*>[\s\S]*?<\/MemoryCard>)/g).map((part, partIdx) => {
-                          const match = part.match(/<MemoryCard[^>]*color="([^"]*)"[^>]*>([\s\S]*?)<\/MemoryCard>/) || part.match(/<MemoryCard[^>]*>([\s\S]*?)<\/MemoryCard>/);
-                          if (match) {
-                            const color = part.match(/color="([^"]*)"/)?.[1] || "#0ea5e9";
-                            const content = match[match.length - 1]; // content is always the last capture group
-                            return (
-                              <div key={partIdx} className="my-6 p-6 rounded-2xl border backdrop-blur-md shadow-2xl relative overflow-hidden" style={{ borderColor: `${color}40`, backgroundColor: `${color}10` }}>
-                                {/* Subtle Background Glow */}
-                                <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${color}, transparent 60%)` }} />
-                                
-                                <div className="flex items-center gap-3 mb-4 relative z-10">
-                                  <div className="p-2 rounded-xl flex items-center justify-center border" style={{ backgroundColor: `${color}20`, borderColor: `${color}30` }}>
-                                    <Brain className="w-5 h-5" style={{ color }} />
-                                  </div>
-                                  <h3 className="font-bold uppercase tracking-widest text-sm" style={{ color }}>Smart Mnemonic</h3>
-                                </div>
-                                
-                                <div className="text-sm prose prose-invert max-w-none relative z-10 prose-strong:text-white">
-                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <ReactMarkdown key={partIdx} remarkPlugins={[remarkGfm]}>
-                              {part}
-                            </ReactMarkdown>
-                          );
-                        })}
-                      </div>
-
-                      {/* Validation & Citations */}
-                      <div className="pt-3 border-t border-white/5 space-y-2">
-                        {m.confidence !== undefined && (
-                          <div className={`flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${m.isSufficient
-                            ? 'text-emerald-400 border-emerald-400/20'
-                            : 'text-amber-400 border-amber-400/20'
-                            }`}>
-                            {m.isSufficient ? <ShieldCheck className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                            {m.isSufficient ? `Verified (${Math.round(m.confidence * 100)}%)` : 'Insufficient Evidence'}
-                          </div>
-                        )}
-
-                        {m.citations && m.citations.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mb-3">
-                            {m.citations.map((c, ci) => (
-                              <div key={ci} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 text-slate-400 rounded-md text-[9px] font-bold border border-white/5">
-                                <List className="w-2.5 h-2.5" />
-                                {c.file_name} • p.{c.page}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {/* Rate Response Button */}
-                        <div className="flex justify-end border-t border-white/5 pt-2 mt-2">
-                          <button 
-                            onClick={() => {
-                              setFeedbackAnswerId(`msg-${i}`);
-                              setIsFeedbackOpen(true);
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors group"
-                          >
-                            <MessageSquareHeart className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                            Rate Response
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                <div className="flex flex-wrap justify-center gap-3 max-w-2xl hidden sm:flex">
+                  {[
+                    "What is drowning?",
+                    "Explain wet vs dry drowning",
+                    "Define immersion syndrome"
+                  ].map((chip) => (
+                    <button 
+                      key={chip}
+                      onClick={(e) => handleSubmit(e, chip)}
+                      className="bg-white border border-border-subtle rounded-full px-5 py-2.5 text-sm text-surface-on-surface-variant hover:border-primary hover:text-primary transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                    >
+                      {chip}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))}
+            ) : (
+              messages.map((msg, index) => (
+                <div 
+                  key={index} 
+                  className={`flex w-full animate-in fade-in slide-in-from-bottom-3 duration-300 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`
+                    relative group
+                    ${msg.role === 'user' 
+                      ? 'bg-primary text-white max-w-[85%] lg:max-w-[70%] rounded-[16px] rounded-tr-[4px] px-[18px] py-[14px] shadow-[0_4px_12px_rgba(13,148,136,0.15)]' 
+                      : 'bg-white border border-border-subtle max-w-[95%] lg:max-w-[85%] rounded-[16px] rounded-tl-[4px] p-5 lg:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] text-surface-on-surface'
+                    }
+                  `}>
+                    {/* Verified Badge for AI */}
+                    {msg.role === 'assistant' && msg.isSufficient !== undefined && (
+                      <div className="flex items-center gap-1.5 mb-4 border-b border-slate-100 pb-3">
+                        {msg.isSufficient ? (
+                          <div className="flex items-center gap-1.5 bg-semantic-success/10 text-semantic-success px-2.5 py-1 rounded-full text-xs font-semibold">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>AI Verified</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-xs font-semibold">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Partial Context</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className={`prose max-w-none text-[15px] leading-relaxed ${msg.role === 'user' ? 'prose-invert text-white' : 'prose-slate text-surface-on-surface'} 
+                      prose-headings:font-serif prose-headings:font-bold prose-headings:mb-3
+                      prose-p:mb-3 last:prose-p:mb-0
+                      prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+                      prose-li:marker:text-primary
+                      prose-code:bg-slate-50 prose-code:border prose-code:border-slate-200 prose-code:rounded-lg prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-sm prose-code:text-slate-800
+                      prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-200 prose-pre:text-slate-800 prose-pre:shadow-none
+                    `}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+
+                    {/* Citations block */}
+                    {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-6 pt-5 border-t border-border-subtle">
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <FileText className="w-4 h-4 text-surface-on-surface-variant" />
+                          <span className="text-xs uppercase tracking-wider font-semibold text-surface-on-surface-variant">Sources</span>
+                        </div>
+                        <div className="space-y-2">
+                          {msg.citations.map((cite, i) => (
+                            <div 
+                              key={i} 
+                              onClick={() => {
+                                if (typeof window !== 'undefined' && (window as any).gtag) {
+                                  (window as any).gtag('event', 'citation_click', {
+                                    event_category: 'interaction',
+                                    event_label: cite.source,
+                                  });
+                                }
+                              }}
+                              className="bg-slate-50 border border-slate-100 rounded-lg p-3 hover:bg-slate-100 transition-colors cursor-pointer group/cite flex items-start gap-3"
+                            >
+                              <div className="bg-white border border-slate-200 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs font-mono shrink-0 mt-0.5 group-hover/cite:border-primary group-hover/cite:text-primary transition-colors">
+                                {i + 1}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-700 truncate">{cite.source}</p>
+                                <p className="text-xs text-slate-500 truncate mt-0.5">Page {cite.page} • {cite.file_name.replace('.pdf', '')}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
 
             {isLoading && (
-              <div className="flex justify-start animate-in fade-in">
-                <div className="glass-card px-5 py-3 rounded-2xl rounded-tl-sm flex gap-2 items-center">
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.15s]" />
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:0.3s]" />
+              <div className="flex w-full justify-start animate-in fade-in duration-300">
+                <div className="bg-white border border-border-subtle rounded-2xl rounded-tl-sm p-4 shadow-sm flex items-center gap-1.5 w-[72px] h-[52px]">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Input Area - Glassmorphism */}
-        <div className="p-4 bg-slate-950/40 backdrop-blur-lg border-t border-white/10 z-50">
-          <form
-            onSubmit={handleSubmit}
-            className="max-w-4xl mx-auto relative"
-          >
-            <div className="glass-card rounded-3xl p-1 focus-within:ring-1 focus-within:ring-primary/50 transition-all">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit(e);
-                  }
-                }}
-                placeholder={getPlaceholder()}
-                className="w-full pl-5 pr-14 py-3 bg-transparent rounded-xl focus:outline-none resize-none min-h-[48px] max-h-[150px] text-slate-200 placeholder-slate-500 text-sm"
-                rows={1}
-              />
-              <button
-                type="submit"
-                disabled={isLoading || !input.trim()}
-                className="absolute right-2 bottom-2 p-2.5 bg-primary text-white rounded-lg hover:shadow-lg hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </form>
-          <p className="mt-3 text-[9px] text-center text-slate-500 font-bold uppercase tracking-[0.2em]">
-            AcaDoc AI • Curriculum Grounded • Zero Hallucination
-          </p>
-        </div>
-
-        {/* Token Management Alerts (§11) */}
-        {quotaAlert !== 'none' && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className={`max-w-md w-full glass-card p-8 border-2 ${quotaAlert === 'hard-stop' ? 'border-red-500/50' : 'border-amber-500/50'} space-y-6 text-center shadow-2xl`}>
-              <div className="flex justify-center">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${quotaAlert === 'hard-stop' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                  {quotaAlert === 'hard-stop' ? <AlertCircle className="w-8 h-8" /> : <ShieldCheck className="w-8 h-8" />}
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <h3 className={`text-xl font-bold ${quotaAlert === 'hard-stop' ? 'text-red-400' : 'text-amber-400'}`}>
-                  {quotaAlert === 'hard-stop' ? '⛔ Access Paused' : '🩺 Academic Resource Alert'}
-                </h3>
-                <p className="text-slate-300 text-sm leading-relaxed">
-                  {quotaAlert === 'hard-stop' 
-                    ? "Your daily curriculum allotment is reached. Access to the Medical Intelligence Suite will reset at midnight."
-                    : "Your current session is nearing its capacity. You have enough for approximately 2 more clinical queries."}
-                </p>
-              </div>
-
-              {quotaAlert === 'warning' && (
+        {/* Input Area */}
+        <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-border-subtle p-4 lg:p-6 pb-6 lg:pb-8">
+          <div className="max-w-4xl mx-auto">
+            <form 
+              onSubmit={handleSubmit}
+              className="relative bg-white border border-border-subtle rounded-2xl p-2 lg:p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.02)] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200"
+            >
+              <div className="flex items-end gap-2 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    autoResize();
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder={`Ask a medical question... (e.g., 'What is drowning?')`}
+                  className="w-full max-h-[200px] min-h-[44px] bg-transparent border-none outline-none resize-none py-2.5 px-3 lg:px-4 text-[15px] leading-relaxed text-surface-on-surface placeholder:text-slate-400 font-sans"
+                  rows={1}
+                />
                 <button 
-                  onClick={() => setQuotaAlert('none')}
-                  className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-amber-500/30"
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  className="shrink-0 w-10 h-10 lg:w-11 lg:h-11 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary-dark hover:scale-105 disabled:bg-slate-200 disabled:text-slate-400 disabled:scale-100 disabled:cursor-not-allowed transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
                 >
-                  Acknowledge & Continue
+                  <Send className="w-5 h-5 ml-0.5" />
                 </button>
-              )}
-
-              {quotaAlert === 'hard-stop' && (
-                <button 
-                  onClick={() => window.location.href = 'https://acadocai.com'}
-                  className="w-full py-3 bg-red-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-red-500/20"
-                >
-                  Return to Dashboard
-                </button>
-              )}
+              </div>
+            </form>
+            <div className="text-center mt-3">
+              <span className="text-xs text-slate-400 font-medium tracking-wide">
+                AcaDoc AI can make mistakes. Verify critical medical information.
+              </span>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      </div>
 
       <FeedbackModal 
         isOpen={isFeedbackOpen} 
         onClose={() => setIsFeedbackOpen(false)} 
-        answerId={feedbackAnswerId}
+        answerId={feedbackAnswerId || ""} 
       />
     </div>
   );
@@ -454,9 +417,12 @@ function HomeContent() {
 
 export default function Home() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-slate-950"><span className="animate-pulse text-primary font-bold">Initializing AcaDoc...</span></div>}>
+    <Suspense fallback={
+      <div className="h-screen w-screen flex items-center justify-center bg-surface-cream">
+        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    }>
       <HomeContent />
     </Suspense>
   );
 }
-
