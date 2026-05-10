@@ -3,7 +3,7 @@
 import Sidebar from '../../components/layout/Sidebar';
 import { useState } from 'react';
 import Link from 'next/link';
-import { Users, Ear, Eye, Search, ArrowRight } from 'lucide-react';
+import { Users, Search, ArrowRight, Microscope } from 'lucide-react';
 
 const SUBJECTS = [
   {

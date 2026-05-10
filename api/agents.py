@@ -31,11 +31,22 @@ def expand_medical_query(query: str) -> list[str]:
                 "Scope of Forensic Medicine",
                 "Forensic sciences include"
             ])
+        elif "community" in q_lower or "psm" in q_lower or "social" in q_lower or "preventive" in q_lower:
+            expansions.extend([
+                "Community medicine is defined",
+                "Preventive and social medicine is",
+                "Definition of community medicine",
+                "Introduction to community medicine",
+                "Concept of health and disease"
+            ])
     
     # ✅ Handle author-specific queries
     if any(name in q_lower for name in ["red", "narayan", "reddy", "ksn", "k.s.n"]):
         expansions.append("KS Narayan Reddy Forensic Medicine")
         expansions.append("Reddy textbook Forensic Medicine definition")
+    elif any(name in q_lower for name in ["park", "k park"]):
+        expansions.append("K. Park Preventive and Social Medicine")
+        expansions.append("Park textbook Community Medicine definition")
     
     # ✅ Handle "concept" queries specifically
     if "concept" in q_lower and "forensic" in q_lower:
@@ -43,6 +54,13 @@ def expand_medical_query(query: str) -> list[str]:
             "Forensic medicine concept",
             "Principles of Forensic Medicine",
             "Foundation of Forensic Medicine"
+        ])
+    elif "concept" in q_lower and ("community" in q_lower or "health" in q_lower):
+        expansions.extend([
+            "Concept of health",
+            "Concept of disease",
+            "Principles of Community Medicine",
+            "Epidemiological triad"
         ])
     
     # Remove duplicates while preserving order
@@ -76,7 +94,10 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
         "defined as",
         "introduction to forensic",
         "forensic sciences include",
-        "branch of medicine"
+        "branch of medicine",
+        "community medicine is",
+        "preventive and social medicine",
+        "concept of health"
     ]
     
     for phrase in definition_phrases:
@@ -109,7 +130,7 @@ def assess_context_sufficiency(retrieved: List[Dict], query: str) -> tuple[bool,
 # MAIN PIPELINE
 # ==============================================================================
 
-async def run_pipeline(question: str, vector_store, llm, subject: str = "Community Medicine", intent: str = "Revise", system_prompt: Optional[str] = None) -> dict:
+async def run_pipeline(question: str, vector_store, llm, subject: str = "Community Medicine", intent: str = "Revise", system_prompt: Optional[str] = None, conversation_history: Optional[List[Dict]] = None) -> dict:
     """
     Main async pipeline for AcaDoc AI.
     """
@@ -172,8 +193,24 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
             for c in retrieved
         ])
         
+        # Build Conversation History String
+        history_text = ""
+        is_add_up_scenario = False
+        if conversation_history:
+            history_text = "Conversation History:\n"
+            for msg in conversation_history[-4:]: # Keep last 4 turns
+                role = "User" if msg.get("role") == "user" else "AcaDoc"
+                history_text += f"{role}: {msg.get('content')}\n"
+            
+            # Detect add-up
+            q_lower = question.lower()
+            add_up_keywords = ["add", "elaborate", "expand", "what about", "also include", "incorporate", "continue", "this", "follow up", "follow-up"]
+            if any(kw in q_lower for kw in add_up_keywords):
+                is_add_up_scenario = True
+
+        intent_normalized = intent.lower() if intent else "revise"
         intent_instructions = ""
-        if intent == "Revise":
+        if intent_normalized == "revise":
             intent_instructions = """
             Format the answer as a Long Answer Question (LAQ) structure.
             Structure: Definition -> Classification (ONLY if essential) -> Pathophysiology -> Clinical -> Management.
@@ -184,9 +221,9 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
             3. Include 'Classification' only if it provides unique value to the topic.
             4. TONE: Professional, clinical, and direct. Avoid conversational fillers.
             """
-        elif intent == "Test":
+        elif intent_normalized == "test":
             intent_instructions = "Format the answer as a quick test. Provide the core fact and then ask a brief follow-up question to test the student."
-        elif intent == "Notes":
+        elif intent_normalized == "notes":
             intent_instructions = """
             Role: Expert Medical Professor creating concise, high-yield study notes.
             Task: Answer using 'Hierarchical Flow' format.
@@ -200,25 +237,39 @@ async def run_pipeline(question: str, vector_store, llm, subject: str = "Communi
             6. Tone: Extremely concise. Eliminate all filler words.
             """
 
+        add_up_instruction = ""
+        if is_add_up_scenario:
+            add_up_instruction = """
+            DETECTED ADD-UP SCENARIO: Follow these specific instructions:
+            1. [Recap]: Acknowledge the previous context and state what you are building upon.
+            2. [Merge]: Combine the old logic from the history with the new evidence from the current context. Provide the Integrated Full Answer, not just the add-on.
+            3. [Paper-Trace]: Ensure the footer cites ALL referenced years and subjects involved in the cumulative answer.
+            """
+
         # Use system_prompt if provided, otherwise default
         base_persona = system_prompt if system_prompt else "You are AcaDoc AI, a textbook-grounded medical tutor for a 3rd Year MBBS student."
         
         prompt = f"""{base_persona}
-Address the user input using ONLY the provided context. If information is missing, state so explicitly.
+Address the user input using ONLY the provided context and history. If information is missing, state so explicitly.
 Keep your tone academic, slightly humorous, professional, and clinical.
 
 Subject: {subject}
 Study Mode: {intent}
-User Input: {question}
 
-Context:
+{history_text}
+
+Current User Input: {question}
+
+Retrieved Context:
 {context_text}
 
 Instructions:
-1. Answer directly based on the context.
+1. Answer directly based on the context. Do NOT start with a preamble introducing your role or stating what you are going to do. Jump straight into the content.
 2. {intent_instructions}
-3. Do NOT add outside information not found in the context.
-4. If the context is insufficient, state what is missing.
+3. {add_up_instruction}
+4. Do NOT add outside information not found in the context.
+5. If the context is insufficient, state what is missing, but do it concisely without long apologies.
+6. Skip any sections of the requested format if the context does not provide the relevant information. Do not mention that you are skipping them.
 
 Response:"""
 

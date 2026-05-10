@@ -38,6 +38,71 @@ from contextlib import asynccontextmanager
 vector_store = None
 vector_store_error = None
 
+# === Pydantic Models for 3rd Year MBBS API (§10) ===
+
+class Message(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    """
+    Request model for 3rd Year MBBS chat endpoint.
+    Supports subject-specific, intent-driven queries with conversation memory.
+    Technical Plan: §3 (Textbook Grounding), §8 (Agent Architecture), §10 (Start Small)
+    """
+    query: str                                    # User's question
+    subject: str                                  # "PSM" | "ENT" | "Ophthalmology" | "Forensic"
+    intent: str                                   # "revise" | "test" | "notes"
+    history_summary: Optional[str] = None         # Compressed context from previous turns (§8)
+    conversation_history: Optional[List[Message]] = [] # Raw history for contextual memory re-synthesis
+    user_id: Optional[str] = None                 # For analytics (can be session_id)
+
+
+class Citation(BaseModel):
+    source: str
+    page: str
+    file_name: str
+
+
+class VisualizationSuggestion(BaseModel):
+    """
+    Placeholder for future diagram/flowchart generation.
+    Technical Plan: Task 4 - Image Generation Stub
+    """
+    suggested_type: str
+    description: str
+    status: str  # "placeholder" until integrated with image generation API
+
+
+class QueryResponse(BaseModel):
+    """
+    Enhanced response model with validation layer outputs (§9).
+    """
+    answer: str
+    citations: List[Citation]
+    is_sufficient: bool
+    confidence: float
+    validation_reason: Optional[str] = None
+    fallback_reason: Optional[str] = None       # Why fallback was triggered
+    visualization: Optional[VisualizationSuggestion] = None
+    error_details: Optional[str] = None
+    action_required: Optional[str] = None       # e.g., "new_session" if token limit exceeded
+
+
+from cachetools import TTLCache
+
+# === CACHING LAYER ===
+# In-memory response cache: max 1000 items, 1 hour TTL
+RESPONSE_CACHE = TTLCache(maxsize=1000, ttl=3600)
+# In-memory session cache: max 5000 sessions, 2 hours TTL
+SESSION_CACHE = TTLCache(maxsize=5000, ttl=7200)
+
+def get_cache_key(query: str, subject: str, intent: str, history_summary: str = "") -> str:
+    """Generates a unique MD5 hash for a query-subject-intent-context combination."""
+    import hashlib
+    raw = f"{query.lower().strip()}_{subject}_{intent}_{history_summary}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Initialize the vector store once at server startup."""
@@ -61,9 +126,51 @@ app = FastAPI(
 )
 
 
+CORE_PERSONA = """Role: You are the Lead Medical Analyst for Acadoc AI.
+Operational Mandate: You must maintain an active mental model of the current conversation. Every response is a continuation of the previous one.
+
+1. Core Objectives
+- Community Medicine (Social & Preventive Medicine): Your goal is Prevention and Promotion. You deal with disease patterns in populations, vaccinations, sanitation, and health policy. The "patient" is the entire community.
+- Forensic Medicine (Medical Jurisprudence): Your goal is Investigation and Evidence. You deal with the application of medical knowledge to legal cases—autopsies, determining the cause of death, and assessing physical assault or injury for legal testimony.
+
+2. Key Differentiators Table
+Use this table to route your logic:
+| Feature | Community Medicine | Forensic Medicine |
+|---|---|---|
+| Primary Subject | Living populations/groups | Deceased individuals or victims of crime |
+| Primary Goal | Eradicating disease & prolonging life | Determining cause/manner of death or injury |
+| Legal Context | Compliance with health acts & policy | Evidence for courts and criminal justice |
+| Key Activity | Screenings, surveys, immunizations | Autopsies (Thanatology), DNA profiling |
+| Output | Health reports, stats, and policies | Medico-legal reports and expert testimony |
+
+3. Memory Protocol
+- Reference Retrieval: Before generating a new response, scan the provided conversation history.
+- State Continuity: If the user says "add to this" or "elaborate" or asks a follow-up, you must first summarize the core points of the previous answer to maintain context.
+- Recursive Generation: Do not just provide the "add-on." Provide the Integrated Full Answer.
+- Structure: [Recap of Previous Answer] + [New Integrated Information] + [Updated Metadata].
+
+4. Instructions for "Add-Up" Scenarios (If follow-up regarding specific paper sections):
+- Acknowledge the Previous Context: Explicitly state what you are building upon.
+- Merge the Data: Combine the old logic with the new evidence.
+- Formatting: Use the "Paper-Trace" footer to cite all referenced years and subjects involved in the cumulative answer.
+
+Instruction for Metadata Extraction (If PYQ context is found):
+If the retrieved context appears to come from a Past Year Question (PYQ) paper (containing exam dates, question numbers, etc.), you MUST append a "Source Attribution Section" at the end of your answer. If the context is strictly from a textbook, DO NOT include the metadata block.
+
+Required Output Format (Only if PYQ context is found):
+Append the following block to your answer:
+📊 Paper-Trace:
+Exam Month/Year: [e.g., November 2025 / Extract from text]
+Question Type: [e.g., Essay Question #11 / Extract from text]
+Cumulative Mentions: [Combine all years/subjects from current and past turns]
+
+CRITICAL RULE:
+NEVER introduce yourself, your role, or explain your thought process. NEVER explain how you categorized the query. Jump DIRECTLY into the final medical answer. Your first sentence MUST be the direct academic answer. DO NOT use introductory filler phrases like "As an expert..." or "I must first categorize...".
+"""
+
 SYSTEM_PROMPTS = {
     # ==================== COMMUNITY MEDICINE (PSM) ====================
-    "PSM-revise": """You are a 3rd Year MBBS Community Medicine tutor specializing in K. Park's Preventive and Social Medicine.
+    "PSM-revise": """You are a 3rd Year MBBS Community Medicine tutor.
     
 STRUCTURE YOUR ANSWER IN LAQ FORMAT:
 1. DEFINITION: Clear, textbook definition from K. Park
@@ -116,7 +223,7 @@ CITATION: K. Park, [Chapter/Section]
 TONE: Organized, clear, exam-ready.""",
 
     # ==================== FORENSIC MEDICINE ====================
-    "Forensic-revise": """You are a 3rd Year MBBS Forensic Medicine tutor specializing in KS Narayan Reddy's Essentials of Forensic Medicine and Toxicology.
+    "Forensic-revise": """You are a 3rd Year MBBS Forensic Medicine tutor specializing in Essentials of Forensic Medicine and Toxicology.
 
 STRUCTURE YOUR ANSWER IN LAQ FORMAT (MATCHING LAQ.pdf):
 1. DEFINITION: Clear, textbook definition from KS Narayan Reddy
@@ -171,14 +278,62 @@ DIFFERENTIAL DIAGNOSIS:
 • Condition 1 vs Condition 2: Key differences
 
 CITATION: KS Narayan Reddy, [Chapter/Page].""",
+
+    # ==================== ANATOMY ====================
+    "Anatomy-revise": """You are a 1st Year MBBS Anatomy tutor specializing in BD Chaurasia's Human Anatomy.
+
+STRUCTURE YOUR ANSWER IN LAQ FORMAT:
+1. DEFINITION/INTRODUCTION: Brief overview of the anatomical structure.
+2. GROSS ANATOMY: Location, extent, shape, size, and relations.
+3. BLOOD SUPPLY: Arterial supply and venous drainage.
+4. NERVE SUPPLY & LYMPHATIC DRAINAGE.
+5. APPLIED/CLINICAL ANATOMY: Clinical significance and common pathologies.
+
+CITATION REQUIREMENT: Cite BD Chaurasia's Human Anatomy.
+TONE: Academic, precise, and structural. Use arrow logic (→) where appropriate.
+ACCURACY: Near-zero hallucination tolerance.""",
+
+    "Anatomy-test": """You are an Anatomy exam tutor for rapid revision.
+
+RESPONSE STYLE:
+- Extremely concise, high-yield facts.
+- Focus on: Muscle attachments, nerve roots, specific relations, and key applied anatomy.
+- Include MCQs and VSA format points.
+- Bullet points for quick scanning.
+
+CITATION: BD Chaurasia's Human Anatomy.
+TONE: Direct, exam-focused.
+LENGTH: Maximum 150-200 words.""",
+
+    "Anatomy-notes": """You are an Anatomy note-making assistant.
+
+FORMAT:
+🦴 TOPIC: [Anatomical Structure]
+
+GROSS ANATOMY:
+• [Key structural points]
+
+RELATIONS:
+→ Anterior:
+→ Posterior:
+
+BLOOD & NERVE SUPPLY:
+✓ Artery: [Name]
+✓ Nerve: [Root value]
+
+APPLIED ANATOMY:
+• [Clinical correlation]
+
+CITATION: BD Chaurasia's Human Anatomy.""",
 }
 
 # ==================== VALID SUBJECTS & INTENTS ====================
-VALID_SUBJECTS = ["PSM", "Forensic"]
+VALID_SUBJECTS = ["PSM", "Forensic","Anatomy"]
 VALID_INTENTS = ["revise", "test", "notes"]
 SUBJECT_TEXTBOOK_MAP = {
     "PSM": "K. Park",
-    "Forensic": "KS Narayan Reddy"
+    "Forensic": "KS Narayan Reddy",
+    "Anatomy": "BD Chaurasia's Human Anatomy"
 }
 
 
@@ -201,7 +356,7 @@ def get_llm():
     gemini_key = os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
     
-    if gemini_key and len(gemini_key) > 10:
+    if gemini_key and len(gemini_key) > 20:
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
             
@@ -210,7 +365,8 @@ def get_llm():
                 model="gemini-2.5-flash",
                 google_api_key=gemini_key,
                 temperature=0.0,
-                max_retries=1
+                max_retries=1,
+                model_kwargs={"automatic_function_calling": {"maximum_remote_calls": 20}}
             )
             
             fallbacks = []
@@ -220,12 +376,13 @@ def get_llm():
                 model="gemini-2.5-pro",
                 google_api_key=gemini_key,
                 temperature=0.0,
-                max_retries=1
+                max_retries=1,
+                model_kwargs={"automatic_function_calling": {"maximum_remote_calls": 20}}
             )
             fallbacks.append(fallback_1)
             
             # Fallback 2: Cross-provider fallback if Google API is completely down
-            if openai_key and len(openai_key) > 10:
+            if openai_key and len(openai_key) > 20:
                 try:
                     from langchain_openai import ChatOpenAI
                     fallback_2 = ChatOpenAI(
@@ -255,51 +412,6 @@ def get_llm():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"No LLM provider available: {e}")
 
-
-# === Pydantic Models for 3rd Year MBBS API (§10) ===
-
-class ChatRequest(BaseModel):
-    """
-    Request model for 3rd Year MBBS chat endpoint.
-    Supports subject-specific, intent-driven queries with conversation memory.
-    Technical Plan: §3 (Textbook Grounding), §8 (Agent Architecture), §10 (Start Small)
-    """
-    query: str                                    # User's question
-    subject: str                                  # "PSM" | "ENT" | "Ophthalmology" | "Forensic"
-    intent: str                                   # "revise" | "test" | "notes"
-    history_summary: Optional[str] = None         # Compressed context from previous turns (§8)
-    user_id: Optional[str] = None                 # For analytics (can be session_id)
-
-
-class Citation(BaseModel):
-    source: str
-    page: str
-    file_name: str
-
-
-class VisualizationSuggestion(BaseModel):
-    """
-    Placeholder for future diagram/flowchart generation.
-    Technical Plan: Task 4 - Image Generation Stub
-    """
-    suggested_type: str
-    description: str
-    status: str  # "placeholder" until integrated with image generation API
-
-
-class QueryResponse(BaseModel):
-    """
-    Enhanced response model with validation layer outputs (§9).
-    """
-    answer: str
-    citations: List[Citation]
-    is_sufficient: bool
-    confidence: float
-    validation_reason: Optional[str] = None
-    fallback_reason: Optional[str] = None       # Why fallback was triggered
-    visualization: Optional[VisualizationSuggestion] = None
-    error_details: Optional[str] = None
-    action_required: Optional[str] = None       # e.g., "new_session" if token limit exceeded
 
 
 # === Token Management Constants (§8 - Token Conservation) ===
@@ -333,7 +445,7 @@ def get_system_prompt(subject: str, intent: str) -> str:
     if key not in SYSTEM_PROMPTS:
         logger.warning(f"Prompt key '{key}' not found, using PSM-revise fallback")
     
-    return prompt
+    return CORE_PERSONA + "\n" + prompt
 
 
 def suggest_visualization(answer_text: str, subject: str) -> VisualizationSuggestion:
@@ -450,7 +562,7 @@ def summarize_conversation_history(history_summary: Optional[str], current_query
     
     # Create concise summary
     if entities:
-        summary = f"Context: {history_summary[:200]}... | Entities: {', '.join(set(entities)[:5])} | Query: {current_query}"
+        summary = f"Context: {history_summary[:200]}... | Entities: {', '.join(list(set(entities))[:5])} | Query: {current_query}"
     else:
         summary = f"Context: {history_summary[:250]} | Query: {current_query}"
     
@@ -533,12 +645,29 @@ async def chat(request: ChatRequest):
     - Token limit exceeded → suggests new session
     - Insufficient context → validation fallback
     """
+    # === CACHE LOOKUP ===
+    # Include history_summary in cache key so contextual questions don't collide
+    summary_for_cache = request.history_summary or ""
+    cache_key = get_cache_key(request.query, request.subject, request.intent, summary_for_cache)
+    if cache_key in RESPONSE_CACHE:
+        logger.info(f"[CACHE HIT] Returning cached response for key: {cache_key}")
+        return RESPONSE_CACHE[cache_key]
+
     llm = None
     vs = get_vector_store()
     
     # Validate inputs
-    subject = request.subject if request.subject in VALID_SUBJECTS else "PSM"
-    intent = request.intent if request.intent in VALID_INTENTS else "revise"
+    subject_map = {
+        "Community Medicine": "PSM",
+        "Forensic Medicine": "Forensic",
+        "Anatomy": "Anatomy"
+    }
+    mapped_subject = subject_map.get(request.subject, request.subject)
+    subject = mapped_subject if mapped_subject in VALID_SUBJECTS else "PSM"
+    
+    intent_lower = request.intent.lower() if request.intent else "revise"
+    intent = intent_lower if intent_lower in VALID_INTENTS else "revise"
+    
     textbook = SUBJECT_TEXTBOOK_MAP.get(subject, "K. Park")
     
     logger.info(f"[CHAT] Subject: {subject}, Intent: {intent}, Query: {request.query[:50]}...")
@@ -563,8 +692,25 @@ async def chat(request: ChatRequest):
     # Get system prompt for this subject-intent combination
     system_prompt = get_system_prompt(subject, intent)
     
-    # Summarize conversation history for context preservation (§8)
-    context_query = summarize_conversation_history(request.history_summary, request.query)
+    # === SESSION MEMORY MANAGEMENT ===
+    session_id = request.user_id or "default_session"
+    
+    # Load history from cache if request doesn't provide it
+    request_history = request.conversation_history or []
+    cached_history = SESSION_CACHE.get(session_id, [])
+    
+    # Merge: Prioritize request history, fallback to cache
+    current_history = request_history if request_history else cached_history
+
+    # Generate a context-aware query for retrieval
+    # If no summary provided, use the cached history to build one
+    effective_summary = request.history_summary
+    if not effective_summary and current_history:
+        # Create a mini-summary from the last 2 turns
+        last_turns = current_history[-2:]
+        effective_summary = " | ".join([f"{m.role}: {m.content[:100]}" for m in last_turns])
+
+    context_query = summarize_conversation_history(effective_summary, request.query)
     
     try:
         # Initialize LLM
@@ -576,11 +722,19 @@ async def chat(request: ChatRequest):
                 detail="Vector store not initialized. Check ingestion pipeline.",
             )
         
-        # === TASK 3: Subject-filtered retrieval ===
-        # Note: Current vector_store_faiss.py doesn't support filtering yet
-        # This is a placeholder for future implementation
-        # chunks = vs.retrieve(context_query, n_results=6, filter={"subject": subject})
-        chunks = await run_pipeline(context_query, vs, llm)
+        
+        # Convert Pydantic models to dicts for the agent pipeline
+        history_dicts = [msg.model_dump() for msg in current_history]
+
+        chunks = await run_pipeline(
+            context_query, 
+            vs, 
+            llm, 
+            subject=subject, 
+            intent=intent, 
+            system_prompt=system_prompt,
+            conversation_history=history_dicts
+        )
         
         # === VALIDATION LAYER (§4, §9) ===
         is_sufficient = chunks.get("validated_context") == "SUFFICIENT"
@@ -655,7 +809,7 @@ async def chat(request: ChatRequest):
             warning_message = f"\n\n⚠️ Approaching session token limit ({total_tokens}/{SOFT_TOKEN_LIMIT}). Consider starting a new session soon."
             answer_text += warning_message
         
-        return QueryResponse(
+        response = QueryResponse(
             answer=answer_text,
             citations=citations_list,
             is_sufficient=True,
@@ -663,6 +817,20 @@ async def chat(request: ChatRequest):
             visualization=visualization,
             validation_reason="Context validated successfully"
         )
+        
+        # === UPDATE CACHES ===
+        # 1. Response Cache
+        RESPONSE_CACHE[cache_key] = response
+        
+        # 2. Session Memory Cache (Add current turn to history)
+        new_history = current_history + [
+            Message(role="user", content=request.query),
+            Message(role="assistant", content=answer_text)
+        ]
+        # Keep only last 10 messages to prevent memory bloat
+        SESSION_CACHE[session_id] = new_history[-10:]
+        
+        return response
         
     except Exception as e:
         # === LLM API FAILURE HANDLING (§5) ===

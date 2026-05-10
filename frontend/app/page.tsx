@@ -46,12 +46,16 @@ function HomeContent() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(searchParams.get('session'));
   
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
   const [feedbackAnswerId, setFeedbackAnswerId] = useState<string | undefined>(undefined);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    // Generate a simple unique session ID for memory caching
+    setSessionId(Math.random().toString(36).substring(2, 15));
+    
     const s = searchParams.get('subject');
     const sess = searchParams.get('session');
     
@@ -139,7 +143,8 @@ function HomeContent() {
         body: JSON.stringify({
           query: queryText,
           subject: subject,
-          intent: 'Revise'
+          intent: intent,
+          user_id: sessionId
         }),
       });
 
