@@ -5,54 +5,54 @@ import { GraduationCap, ShieldCheck, Brain } from "lucide-react";
 
 export default function SignInPage() {
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Dynamic Background Blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#089a9b]/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
+    <div className="min-h-screen bg-surface-cream text-surface-on-surface flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Subtle Medical Grid Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px)`,
+        backgroundSize: '48px 48px'
+      }} />
 
       <div className="max-w-md w-full space-y-8 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#089a9b]/10 border border-[#089a9b]/20 mb-2 shadow-[0_0_20px_-5px_rgba(8,154,155,0.3)]">
-            <GraduationCap className="w-8 h-8 text-[#089a9b]" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-2 shadow-sm">
+            <GraduationCap className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tighter text-white font-manrope">
-            AcaDoc <span className="text-[#089a9b] italic">AI</span>
+          <h1 className="text-4xl font-bold font-serif text-surface-on-surface">
+            AcaDoc AI
           </h1>
-          <p className="text-slate-400 text-sm max-w-[280px] mx-auto leading-relaxed">
-            Authorized Intelligence Gateway for 3rd Year MBBS Students.
+          <p className="text-surface-on-surface-variant text-sm max-w-[280px] mx-auto leading-relaxed font-sans">
+            Authorized Intelligence Gateway for Medical Students.
           </p>
         </div>
 
-        <div className="glass-card rounded-3xl p-8 border border-white/10 space-y-8 shadow-2xl relative overflow-hidden group">
-          {/* Subtle hover glow */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-[#089a9b]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          
+        <div className="bg-white rounded-3xl p-8 border border-border-subtle space-y-8 shadow-elevated relative overflow-hidden group">
           <div className="space-y-6 relative z-10">
             <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 transition-colors hover:bg-white/[0.07]">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                  <ShieldCheck className="w-5 h-5 text-emerald-500" />
+              <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-semantic-success/10 flex items-center justify-center border border-semantic-success/20">
+                  <ShieldCheck className="w-5 h-5 text-semantic-success" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-slate-400">Grounded in medical textbooks.</p>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-surface-on-surface">Verified</h3>
+                  <p className="text-[11px] text-surface-on-surface-variant">Grounded in medical textbooks.</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 transition-colors hover:bg-white/[0.07]">
-                <div className="w-10 h-10 rounded-full bg-[#089a9b]/10 flex items-center justify-center border border-[#089a9b]/20">
-                  <Brain className="w-5 h-5 text-[#089a9b]" />
+              <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                  <Brain className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Adaptive</h3>
-                  <p className="text-[10px] text-slate-400">Smart mnemonics & recall.</p>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-surface-on-surface">Adaptive</h3>
+                  <p className="text-[11px] text-surface-on-surface-variant">Smart mnemonics & recall.</p>
                 </div>
               </div>
             </div>
 
             <button
               onClick={() => signIn("google", { callbackUrl: "/subjects" })}
-              className="w-full flex items-center justify-center gap-3 py-4 bg-white text-slate-950 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all shadow-xl shadow-white/5 active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-3 py-4 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-primary-dark transition-all shadow-md active:scale-[0.98] min-h-[56px]"
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 bg-white rounded-full p-0.5 text-slate-800" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -75,7 +75,7 @@ export default function SignInPage() {
           </div>
         </div>
 
-        <p className="text-center text-[10px] text-slate-500 uppercase tracking-[0.3em] font-bold">
+        <p className="text-center text-[10px] text-surface-on-surface-variant uppercase tracking-[0.3em] font-bold">
           Authorized Medical Access Only
         </p>
       </div>

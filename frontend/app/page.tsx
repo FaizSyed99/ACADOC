@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Send, Menu, Brain, CheckCircle, AlertCircle, FileText, Activity, PlusCircle } from 'lucide-react';
+import { Send, Menu, Activity, Plus, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import Sidebar from '../components/layout/Sidebar';
 import FeedbackModal from '../components/ui/FeedbackModal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import Image from 'next/image';
 
 interface Citation {
   source: string;
@@ -24,15 +23,6 @@ interface Message {
   reason?: string;
 }
 
-export const SUBJECTS = [
-  "Community Medicine",
-  "Forensic Medicine",
-  "Ophthalmology",
-  "ENT"
-];
-
-import { Suspense } from 'react';
-
 function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -43,6 +33,7 @@ function HomeContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const [subject, setSubject] = useState(searchParams.get('subject') || 'Community Medicine');
+  const [intent, setIntent] = useState('Revise');
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(searchParams.get('session'));
   
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
@@ -53,13 +44,13 @@ function HomeContent() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // Generate a simple unique session ID for memory caching
     setSessionId(Math.random().toString(36).substring(2, 15));
     
     const s = searchParams.get('subject');
     const sess = searchParams.get('session');
     
     if (s) setSubject(s);
+    else if (!s && !sess) router.push('/subjects');
     
     if (sess && sess !== currentSessionId) {
       setCurrentSessionId(sess);
@@ -108,9 +99,8 @@ function HomeContent() {
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setIsLoading(true);
 
-    let sessionId = currentSessionId;
+    let currentSessId = currentSessionId;
     
-    // GA4 Tracking
     if (typeof window !== 'undefined' && (window as any).gtag) {
       (window as any).gtag('event', 'message_send', {
         event_category: 'chat',
@@ -118,18 +108,18 @@ function HomeContent() {
       });
     }
 
-    if (!sessionId && messages.length === 0) {
+    if (!currentSessId && messages.length === 0) {
       try {
         const sessionRes = await fetch('/api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject, intent: 'Revise', summary: queryText.substring(0, 50) + "..." })
+          body: JSON.stringify({ subject, intent, summary: queryText.substring(0, 50) + "..." })
         });
         if (sessionRes.ok) {
           const sessionData = await sessionRes.json();
-          sessionId = sessionData.session?.id;
-          setCurrentSessionId(sessionId);
-          window.history.pushState(null, '', `/?subject=${encodeURIComponent(subject)}&session=${sessionId}`);
+          currentSessId = sessionData.session?.id;
+          setCurrentSessionId(currentSessId);
+          window.history.pushState(null, '', `/?subject=${encodeURIComponent(subject)}&session=${currentSessId}`);
         }
       } catch (e) {
         console.error("Failed to create session", e);
@@ -143,7 +133,7 @@ function HomeContent() {
         body: JSON.stringify({
           query: queryText,
           subject: subject,
-          intent: 'Revise',
+          intent: intent,
           user_id: sessionId
         }),
       });
@@ -165,14 +155,14 @@ function HomeContent() {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      if (sessionId) {
-        fetch(`/api/sessions/${sessionId}`, {
+      if (currentSessId) {
+        fetch(`/api/sessions/${currentSessId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: userMessage })
         }).catch(console.error);
 
-        fetch(`/api/sessions/${sessionId}`, {
+        fetch(`/api/sessions/${currentSessId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: assistantMessage })
@@ -190,133 +180,116 @@ function HomeContent() {
   };
 
   return (
-    <div className="flex h-screen bg-surface-cream overflow-hidden selection:bg-primary/20 selection:text-primary-dark">
+    <div className="flex h-[100dvh] bg-[#FAFAF8] overflow-hidden selection:bg-primary/20 selection:text-primary-dark relative">
+      
+      {/* Background Grid */}
+      <div className="fixed inset-0 z-0 pointer-events-none opacity-20" style={{
+        backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px)`,
+        backgroundSize: '48px 48px'
+      }} />
+
       {/* Sidebar */}
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} intent={intent} setIntent={setIntent} />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div className="flex-1 flex flex-col min-w-0 relative z-10 w-full">
         {/* Header */}
-        <header className="sticky top-0 z-30 h-[72px] bg-white/90 backdrop-blur-md border-b border-border-subtle flex items-center justify-between px-4 lg:px-6 shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-30 h-[64px] lg:h-[72px] bg-white/95 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 shrink-0">
+          <div className="flex items-center">
             <button 
-              className="lg:hidden p-2 -ml-2 text-surface-on-surface-variant hover:text-surface-on-surface rounded-lg hover:bg-slate-50 transition-colors"
+              className="lg:hidden w-[44px] h-[44px] flex items-center justify-center -ml-2 text-slate-700 hover:text-slate-900 rounded-lg active:bg-slate-100 transition-colors"
               onClick={() => setIsSidebarOpen(true)}
+              aria-label="Open sidebar"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="hidden lg:flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+            <div className="hidden sm:flex items-center gap-3 lg:ml-0 ml-2">
+              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center shrink-0">
                 <span className="font-serif text-primary font-bold">A</span>
               </div>
-              <span className="font-serif font-bold text-surface-on-surface text-lg">AcaDoc AI</span>
+              <div className="flex flex-col">
+                <span className="font-serif font-bold text-slate-900 leading-tight">AcaDoc AI</span>
+                <span className="text-[10px] text-slate-500 uppercase tracking-widest hidden lg:block leading-tight">Medical Intelligence</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex-1 max-w-md mx-4 flex justify-center">
-            <select 
-              value={subject}
-              onChange={(e) => {
-                const newSubject = e.target.value;
-                setSubject(newSubject);
-                if (typeof window !== 'undefined' && (window as any).gtag) {
-                  (window as any).gtag('event', 'subject_change', {
-                    event_category: 'navigation',
-                    event_label: newSubject,
-                  });
-                }
-              }}
-              className="border border-border-subtle bg-white text-surface-on-surface rounded-lg px-4 py-2 text-sm font-medium hover:bg-slate-50 transition-colors focus:outline-none focus:border-border-focus focus:ring-1 focus:ring-primary shadow-sm appearance-none cursor-pointer w-full max-w-[240px] text-center"
-              style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em' }}
-            >
-              {SUBJECTS.map(sub => (
-                <option key={sub} value={sub}>{sub}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center">
-            <button 
-              onClick={() => {
-                router.push('/');
-                setMessages([]);
-                setCurrentSessionId(null);
-              }}
-              className="hidden sm:flex bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dark transition-colors items-center gap-2 shadow-sm"
-            >
-              <PlusCircle className="w-4 h-4" />
-              New Chat
-            </button>
-          </div>
+          <button 
+            onClick={() => {
+              router.push('/');
+              setMessages([]);
+              setCurrentSessionId(null);
+            }}
+            className="flex items-center justify-center gap-2 bg-[#0D9488] text-white rounded-xl font-medium hover:bg-[#0F766E] transition-colors w-[44px] h-[44px] lg:w-auto lg:px-4 lg:py-2.5"
+            aria-label="New Chat"
+          >
+            <Plus className="w-5 h-5 lg:w-4 lg:h-4" />
+            <span className="hidden lg:inline text-sm">New Chat</span>
+          </button>
         </header>
 
         {/* Chat Thread */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[200px] scroll-smooth">
-          <div className="max-w-4xl mx-auto px-4 py-8 lg:py-12 flex flex-col gap-6">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[180px] lg:pb-[200px] scroll-smooth">
+          <div className="max-w-3xl mx-auto px-4 py-4 lg:px-6 lg:py-8 flex flex-col gap-4 lg:gap-5">
             
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="w-24 h-24 bg-primary/5 rounded-full flex items-center justify-center mb-6 relative">
-                  <div className="absolute inset-0 border border-primary/20 rounded-full animate-[ping_3s_ease-in-out_infinite]" />
-                  <Activity className="w-12 h-12 text-primary opacity-80" />
+              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-in fade-in duration-700">
+                <div className="w-20 h-20 lg:w-28 lg:h-28 bg-primary/5 rounded-full flex items-center justify-center mb-6">
+                  <Activity className="w-10 h-10 lg:w-14 lg:h-14 text-primary opacity-20" />
                 </div>
-                <h1 className="font-serif text-3xl lg:text-4xl font-bold text-surface-on-surface mb-3">Welcome to AcaDoc AI</h1>
-                <p className="text-surface-on-surface-variant max-w-md mb-10 text-[15px] leading-relaxed">
-                  Ask textbook-grounded questions about {subject.toLowerCase() || 'any medical topic'}. Every answer is verified against clinical literature.
+                <h1 className="font-serif text-2xl lg:text-3xl font-bold text-slate-900 mb-3">Welcome to AcaDoc AI</h1>
+                <p className="text-sm lg:text-base text-slate-600 max-w-md mb-8">
+                  Ask textbook-grounded questions about {subject.toLowerCase()}. Every answer is verified against clinical literature.
                 </p>
-                <div className="flex flex-wrap justify-center gap-3 max-w-2xl hidden sm:flex">
-                  {[
-                    "What is drowning?",
-                    "Explain wet vs dry drowning",
-                    "Define immersion syndrome"
-                  ].map((chip) => (
-                    <button 
-                      key={chip}
-                      onClick={(e) => handleSubmit(e, chip)}
-                      className="bg-white border border-border-subtle rounded-full px-5 py-2.5 text-sm text-surface-on-surface-variant hover:border-primary hover:text-primary transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5"
-                    >
-                      {chip}
-                    </button>
-                  ))}
+                
+                <div className="flex w-full overflow-x-auto snap-x hide-scrollbar sm:flex-wrap sm:justify-center pb-4 lg:pb-0">
+                  <div className="flex sm:flex-wrap gap-2 px-2 min-w-max sm:min-w-0 sm:justify-center">
+                    {[
+                      "What is drowning?",
+                      "Explain wet vs dry drowning",
+                      "Define immersion syndrome"
+                    ].map((chip) => (
+                      <button 
+                        key={chip}
+                        onClick={(e) => handleSubmit(e, chip)}
+                        className="snap-center bg-white border border-slate-200 rounded-full px-4 py-2.5 text-sm text-slate-600 hover:border-primary hover:text-primary transition-colors min-h-[44px] flex-shrink-0"
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
               messages.map((msg, index) => (
                 <div 
                   key={index} 
-                  className={`flex w-full animate-in fade-in slide-in-from-bottom-3 duration-300 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div className={`
-                    relative group
+                    relative group flex flex-col
                     ${msg.role === 'user' 
-                      ? 'bg-primary text-white max-w-[85%] lg:max-w-[70%] rounded-[16px] rounded-tr-[4px] px-[18px] py-[14px] shadow-[0_4px_12px_rgba(13,148,136,0.15)]' 
-                      : 'bg-white border border-border-subtle max-w-[95%] lg:max-w-[85%] rounded-[16px] rounded-tl-[4px] p-5 lg:p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] text-surface-on-surface'
+                      ? 'bg-[#0D9488] text-white max-w-[85%] lg:max-w-[75%] rounded-[16px] rounded-tr-[4px] px-[16px] py-[12px] lg:px-[18px] lg:py-[14px] shadow-[0_2px_8px_rgba(13,148,136,0.2)]' 
+                      : 'bg-[#FFFFFF] border border-[#E2E8F0] max-w-[90%] lg:max-w-[80%] rounded-[16px] rounded-tl-[4px] px-[16px] py-[14px] lg:px-[20px] lg:py-[16px] shadow-[0_2px_6px_rgba(0,0,0,0.04)] text-slate-900'
                     }
                   `}>
                     {/* Verified Badge for AI */}
                     {msg.role === 'assistant' && msg.isSufficient !== undefined && (
-                      <div className="flex items-center gap-1.5 mb-4 border-b border-slate-100 pb-3">
-                        {msg.isSufficient ? (
-                          <div className="flex items-center gap-1.5 bg-semantic-success/10 text-semantic-success px-2.5 py-1 rounded-full text-xs font-semibold">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            <span>AI Verified</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-xs font-semibold">
-                            <AlertCircle className="w-3.5 h-3.5" />
-                            <span>Partial Context</span>
-                          </div>
-                        )}
+                      <div className="absolute -top-3 right-4 bg-white rounded-full px-2.5 py-1 border border-slate-200 shadow-sm flex items-center gap-1.5 h-[28px]">
+                        <div className={`w-2 h-2 rounded-full ${msg.isSufficient ? 'bg-semantic-success' : 'bg-amber-500'}`} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                          {msg.isSufficient ? 'AI Verified' : 'Partial'}
+                        </span>
                       </div>
                     )}
 
-                    <div className={`prose max-w-none text-[15px] leading-relaxed ${msg.role === 'user' ? 'prose-invert text-white' : 'prose-slate text-surface-on-surface'} 
+                    <div className={`prose max-w-none text-[15px] leading-[1.6] ${msg.role === 'user' ? 'prose-invert text-white' : 'prose-slate text-slate-900'} 
                       prose-headings:font-serif prose-headings:font-bold prose-headings:mb-3
                       prose-p:mb-3 last:prose-p:mb-0
-                      prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+                      prose-a:text-primary prose-a:no-underline
                       prose-li:marker:text-primary
-                      prose-code:bg-slate-50 prose-code:border prose-code:border-slate-200 prose-code:rounded-lg prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-sm prose-code:text-slate-800
-                      prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-200 prose-pre:text-slate-800 prose-pre:shadow-none
+                      prose-code:bg-slate-50 prose-code:border prose-code:border-slate-200 prose-code:rounded-md prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[13px] prose-code:text-slate-800
+                      prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-200 prose-pre:text-slate-800 prose-pre:shadow-none prose-pre:rounded-xl
                     `}>
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {msg.content}
@@ -325,12 +298,11 @@ function HomeContent() {
 
                     {/* Citations block */}
                     {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
-                      <div className="mt-6 pt-5 border-t border-border-subtle">
-                        <div className="flex items-center gap-1.5 mb-3">
-                          <FileText className="w-4 h-4 text-surface-on-surface-variant" />
-                          <span className="text-xs uppercase tracking-wider font-semibold text-surface-on-surface-variant">Sources</span>
+                      <div className="mt-4 pt-3 border-t border-slate-200 bg-slate-50/50 -mx-4 -mb-4 px-4 pb-4 lg:-mx-5 lg:-mb-5 lg:px-5 lg:pb-5 rounded-b-[16px]">
+                        <div className="flex items-center gap-1.5 mb-2.5 pt-1">
+                          <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Reference Context</span>
                         </div>
-                        <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
                           {msg.citations.map((cite, i) => (
                             <div 
                               key={i} 
@@ -342,14 +314,14 @@ function HomeContent() {
                                   });
                                 }
                               }}
-                              className="bg-slate-50 border border-slate-100 rounded-lg p-3 hover:bg-slate-100 transition-colors cursor-pointer group/cite flex items-start gap-3"
+                              className="inline-flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-100 transition-colors cursor-pointer group/cite min-h-[44px]"
                             >
-                              <div className="bg-white border border-slate-200 text-slate-500 w-6 h-6 rounded flex items-center justify-center text-xs font-mono shrink-0 mt-0.5 group-hover/cite:border-primary group-hover/cite:text-primary transition-colors">
+                              <div className="bg-slate-100 text-slate-500 w-5 h-5 rounded flex items-center justify-center text-[11px] font-mono shrink-0 group-hover/cite:bg-primary/10 group-hover/cite:text-primary transition-colors">
                                 {i + 1}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-700 truncate">{cite.source}</p>
-                                <p className="text-xs text-slate-500 truncate mt-0.5">Page {cite.page} • {cite.file_name.replace('.pdf', '')}</p>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-[13px] font-medium text-slate-700 leading-tight truncate max-w-[200px] sm:max-w-none">{cite.source}</span>
+                                <span className="text-[11px] text-slate-500 leading-tight">Pg. {cite.page}</span>
                               </div>
                             </div>
                           ))}
@@ -363,10 +335,10 @@ function HomeContent() {
 
             {isLoading && (
               <div className="flex w-full justify-start animate-in fade-in duration-300">
-                <div className="bg-white border border-border-subtle rounded-2xl rounded-tl-sm p-4 shadow-sm flex items-center gap-1.5 w-[72px] h-[52px]">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="bg-white border border-slate-200 rounded-[16px] rounded-tl-[4px] p-4 shadow-sm flex items-center gap-1.5 h-[52px]">
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             )}
@@ -374,39 +346,33 @@ function HomeContent() {
         </div>
 
         {/* Input Area */}
-        <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-border-subtle p-4 lg:p-6 pb-6 lg:pb-8">
-          <div className="max-w-4xl mx-auto">
+        <div className="fixed bottom-0 left-0 right-0 lg:left-[280px] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 lg:p-6 lg:pb-8 z-40 pb-[env(safe-area-inset-bottom,1rem)]">
+          <div className="max-w-3xl mx-auto">
             <form 
               onSubmit={handleSubmit}
-              className="relative bg-white border border-border-subtle rounded-2xl p-2 lg:p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.02)] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 transition-all duration-200"
+              className="relative bg-white border border-slate-200 rounded-2xl p-2 lg:p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] focus-within:border-[#0D9488] focus-within:ring-2 focus-within:ring-teal-500/10 transition-all duration-200 min-h-[56px] flex items-end"
             >
-              <div className="flex items-end gap-2 relative">
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    autoResize();
-                  }}
-                  onKeyDown={handleKeyDown}
-                  placeholder={`Ask a medical question... (e.g., 'What is drowning?')`}
-                  className="w-full max-h-[200px] min-h-[44px] bg-transparent border-none outline-none resize-none py-2.5 px-3 lg:px-4 text-[15px] leading-relaxed text-surface-on-surface placeholder:text-slate-400 font-sans"
-                  rows={1}
-                />
-                <button 
-                  type="submit"
-                  disabled={!input.trim() || isLoading}
-                  className="shrink-0 w-10 h-10 lg:w-11 lg:h-11 rounded-xl bg-primary text-white flex items-center justify-center hover:bg-primary-dark hover:scale-105 disabled:bg-slate-200 disabled:text-slate-400 disabled:scale-100 disabled:cursor-not-allowed transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                >
-                  <Send className="w-5 h-5 ml-0.5" />
-                </button>
-              </div>
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  autoResize();
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask a medical question..."
+                className="w-full max-h-[200px] min-h-[40px] bg-transparent border-none outline-none resize-none py-2 px-2 lg:px-3 text-[16px] leading-[1.5] text-slate-900 placeholder:text-slate-400 font-sans pr-[56px]"
+                rows={1}
+              />
+              <button 
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className="absolute right-2 bottom-2 w-[44px] h-[44px] rounded-xl bg-[#0D9488] text-white flex items-center justify-center hover:bg-[#0F766E] disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+                aria-label="Send message"
+              >
+                <Send className="w-5 h-5 ml-0.5" />
+              </button>
             </form>
-            <div className="text-center mt-3">
-              <span className="text-xs text-slate-400 font-medium tracking-wide">
-                AcaDoc AI can make mistakes. Verify critical medical information.
-              </span>
-            </div>
           </div>
         </div>
       </div>
@@ -423,7 +389,7 @@ function HomeContent() {
 export default function Home() {
   return (
     <Suspense fallback={
-      <div className="h-screen w-screen flex items-center justify-center bg-surface-cream">
+      <div className="h-screen w-screen flex items-center justify-center bg-[#FAFAF8]">
         <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
       </div>
     }>
