@@ -143,7 +143,7 @@ function HomeContent() {
         body: JSON.stringify({
           query: queryText,
           subject: subject,
-          intent: intent,
+          intent: 'Revise',
           user_id: sessionId
         }),
       });
