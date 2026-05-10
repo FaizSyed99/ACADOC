@@ -3,48 +3,59 @@
 import Sidebar from '../../components/layout/Sidebar';
 import { useState } from 'react';
 import Link from 'next/link';
-import { Users, Search, ArrowRight, Microscope } from 'lucide-react';
+import { Users, Search, ArrowRight, Menu } from 'lucide-react';
+import UserNav from '../../components/ui/UserNav';
 
 const SUBJECTS = [
   {
-    id: "Forensic Medicine and Toxicology",
-    name: "Forensic Medicine and Toxicology",
+    id: "Community Medicine",
+    name: "Social and Preventive Medicine",
     description: "Study of population health, disease prevention, and community healthcare systems.",
     icon: Users,
-    image: "/images/subjects/community_medicine.png",
-    color: "from-blue-500/20 to-cyan-500/20"
+    color: "from-teal-500/10 to-emerald-500/10"
   },
   {
-    id: "Social and Preventive Medicine",
-    name: "Social and Preventive Medicine",
+    id: "Forensic Medicine",
+    name: "Forensic Medicine and Toxicology",
     description: "Application of medical knowledge to legal investigations and criminal justice.",
     icon: Search,
-    image: "/images/subjects/forensic_medicine.png",
-    color: "from-slate-500/20 to-zinc-500/20"
+    color: "from-slate-500/10 to-zinc-500/10"
   }
 ];
 
 export default function SubjectsPage() {
-  const [intent, setIntent] = useState('Revise');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-transparent">
-      <Sidebar intent={intent} setIntent={setIntent} />
+    <div className="flex h-screen bg-surface-cream overflow-hidden selection:bg-primary/20 selection:text-primary-dark">
+      {/* Sidebar */}
+      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-      <main className="flex flex-col flex-1 relative overflow-hidden md:pl-24">
+      <main className="flex flex-col flex-1 relative min-w-0">
         {/* Header */}
-        <header className="flex items-center justify-between px-8 h-16 bg-slate-950/40 backdrop-blur-[20px] border-b border-white/10 z-50 sticky top-0">
+        <header className="sticky top-0 z-30 h-[72px] bg-white/90 backdrop-blur-md border-b border-border-subtle flex items-center px-4 lg:px-6 shrink-0">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-primary tracking-tighter font-manrope antialiased tracking-wide">Explore Subjects</h1>
+            <button 
+              className="lg:hidden p-2 -ml-2 text-surface-on-surface-variant hover:text-surface-on-surface rounded-lg hover:bg-slate-50 transition-colors"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <div className="hidden lg:flex items-center gap-2">
+              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+                <span className="font-serif text-primary font-bold">A</span>
+              </div>
+              <span className="font-serif font-bold text-surface-on-surface text-lg">AcaDoc AI</span>
+            </div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 z-10">
-          <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 mt-4">
-            <header>
-              <h2 className="font-h1 text-on-surface mb-1 text-3xl">Medical Curriculum</h2>
-              <p className="font-body-lg text-on-surface-variant max-w-2xl text-sm">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 z-10 scroll-smooth">
+          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 mt-4">
+            <header className="mb-10 text-center">
+              <h1 className="font-serif text-3xl lg:text-4xl font-bold text-surface-on-surface mb-3">Medical Curriculum</h1>
+              <p className="font-sans text-[15px] leading-relaxed text-surface-on-surface-variant max-w-2xl mx-auto">
                 Select a subject to begin your textbook-grounded intelligence session. Access high-yield notes, clinical summaries, and exam-focused insights.
               </p>
             </header>
@@ -55,26 +66,24 @@ export default function SubjectsPage() {
                 <Link
                   key={subject.id}
                   href={`/?subject=${encodeURIComponent(subject.id)}`}
-                  className="group relative h-[240px] rounded-xl overflow-hidden glass-card border border-white/10 glow-hover transition-all duration-500"
+                  className="group relative h-[240px] rounded-2xl overflow-hidden bg-white border border-border-subtle hover:border-primary transition-all duration-300 shadow-sm hover:shadow-lg hover:-translate-y-1"
                 >
-                  {/* Background Image temporarily removed */}
-                  <div className={`absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent opacity-90 transition-opacity group-hover:opacity-100`} />
+                  <div className={`absolute inset-0 bg-gradient-to-br ${subject.color} opacity-50 group-hover:opacity-100 transition-opacity duration-300`} />
 
                   {/* Content */}
-                  <div className="relative h-full p-6 flex flex-col justify-end">
-                    <div className="flex items-center gap-4 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-primary/20 backdrop-blur-xl flex items-center justify-center border border-primary/30 group-hover:bg-primary transition-colors duration-300">
-                        <subject.icon className="w-5 h-5 text-primary group-hover:text-white transition-colors" />
-                      </div>
-                      <h3 className="font-h2 text-xl group-hover:text-primary transition-colors">{subject.name}</h3>
+                  <div className="relative h-full p-6 flex flex-col">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 group-hover:bg-primary transition-colors duration-300 mb-4">
+                      <subject.icon className="w-6 h-6 text-primary group-hover:text-white transition-colors" />
                     </div>
+                    
+                    <h3 className="font-serif font-bold text-xl text-surface-on-surface mb-2">{subject.name}</h3>
 
-                    <p className="text-slate-400 text-xs max-w-sm mb-4 line-clamp-2 group-hover:text-slate-200 transition-colors">
+                    <p className="text-surface-on-surface-variant text-sm max-w-sm mb-4 line-clamp-2">
                       {subject.description}
                     </p>
 
                     {/* CTA on Hover */}
-                    <div className="flex items-center gap-2 text-primary font-bold text-xs tracking-widest uppercase opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+                    <div className="mt-auto flex items-center gap-2 text-primary font-bold text-xs tracking-widest uppercase opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
                       <span>Study {subject.name}</span>
                       <ArrowRight className="w-4 h-4" />
                     </div>
