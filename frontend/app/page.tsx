@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Send, Menu, Activity, Plus, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import Sidebar from '../components/layout/Sidebar';
 import FeedbackModal from '../components/ui/FeedbackModal';
+import MemoryCard from '../components/ui/MemoryCard';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -291,9 +292,58 @@ function HomeContent() {
                       prose-code:bg-slate-50 prose-code:border prose-code:border-slate-200 prose-code:rounded-md prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[13px] prose-code:text-slate-800
                       prose-pre:bg-slate-50 prose-pre:border prose-pre:border-slate-200 prose-pre:text-slate-800 prose-pre:shadow-none prose-pre:rounded-xl
                     `}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.content}
-                      </ReactMarkdown>
+                      {(() => {
+                        const content = msg.content;
+                        const memoryCardRegex = /<MemoryCard([^>]*)>([\s\S]*?)<\/MemoryCard>/gi;
+                        const parts = [];
+                        let lastIndex = 0;
+                        let match;
+
+                        while ((match = memoryCardRegex.exec(content)) !== null) {
+                          if (match.index > lastIndex) {
+                            parts.push({
+                              type: 'markdown',
+                              text: content.substring(lastIndex, match.index)
+                            });
+                          }
+
+                          const attributes = match[1];
+                          const innerContent = match[2];
+                          const colorMatch = attributes.match(/color="([^"]+)"/);
+                          const color = colorMatch ? colorMatch[1] : undefined;
+
+                          parts.push({
+                            type: 'memorycard',
+                            content: innerContent,
+                            color: color
+                          });
+
+                          lastIndex = match.index + match[0].length;
+                        }
+
+                        if (lastIndex < content.length) {
+                          parts.push({
+                            type: 'markdown',
+                            text: content.substring(lastIndex)
+                          });
+                        }
+
+                        if (parts.length === 0) {
+                          return <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>;
+                        }
+
+                        return (
+                          <>
+                            {parts.map((part, i) => {
+                              if (part.type === 'markdown') {
+                                return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>;
+                              } else {
+                                return <MemoryCard key={i} content={part.content as string} color={part.color} />;
+                              }
+                            })}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Citations block */}
