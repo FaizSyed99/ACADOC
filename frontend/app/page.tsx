@@ -346,14 +346,16 @@ function HomeContent() {
                       })()}
                     </div>
 
-                    {/* Citations block */}
-                    {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                    {/* Citations block (Filtered to PYQs only) */}
+                    {msg.role === 'assistant' && msg.citations && msg.citations.some(cite => cite.source?.toLowerCase().includes('pyq') || cite.file_name?.toLowerCase().includes('pyq')) && (
                       <div className="mt-4 pt-3 border-t border-slate-200 bg-slate-50/50 -mx-4 -mb-4 px-4 pb-4 lg:-mx-5 lg:-mb-5 lg:px-5 lg:pb-5 rounded-b-[16px]">
                         <div className="flex items-center gap-1.5 mb-2.5 pt-1">
-                          <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Reference Context</span>
+                          <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Previous Year Questions</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {msg.citations.map((cite, i) => (
+                          {msg.citations
+                            .filter(cite => cite.source?.toLowerCase().includes('pyq') || cite.file_name?.toLowerCase().includes('pyq'))
+                            .map((cite, i) => (
                             <div 
                               key={i} 
                               onClick={() => {
@@ -371,7 +373,7 @@ function HomeContent() {
                               </div>
                               <div className="flex flex-col min-w-0">
                                 <span className="text-[13px] font-medium text-slate-700 leading-tight truncate max-w-[200px] sm:max-w-none">{cite.source}</span>
-                                <span className="text-[11px] text-slate-500 leading-tight">Pg. {cite.page}</span>
+                                <span className="text-[11px] text-slate-500 leading-tight">{cite.file_name.replace('.pdf', '')}</span>
                               </div>
                             </div>
                           ))}
